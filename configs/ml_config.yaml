@@ -1,0 +1,4 @@
+ml:
+  model_type: isolation_forest
+  random_state: 42
+  train_split: 0.8

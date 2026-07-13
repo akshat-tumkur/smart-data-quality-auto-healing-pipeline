@@ -1,0 +1,6 @@
+validation_rules:
+  completeness: true
+  uniqueness: true
+  validity: true
+  consistency: true
+  accuracy: true

@@ -1,0 +1,5 @@
+pipeline:
+  name: smart-data-quality-auto-healing-pipeline
+  environment: development
+  batch_size: 1000
+  retry_count: 3

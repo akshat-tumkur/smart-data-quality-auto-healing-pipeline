@@ -1,0 +1,6 @@
+database:
+  host: localhost
+  port: 5432
+  name: smart_data_quality
+  user: user
+  password: password

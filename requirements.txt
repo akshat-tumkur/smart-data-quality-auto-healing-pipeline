@@ -1,0 +1,9 @@
+pandas
+numpy
+pyyaml
+scikit-learn
+streamlit
+sqlalchemy
+psycopg2-binary
+requests
+python-dotenv
