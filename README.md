@@ -3,10 +3,9 @@
 Scaffold for a data quality, validation, and auto-healing pipeline.
 
 ## Structure
+- `src/` for all application packages and orchestration placeholders
 - `configs/` for YAML configuration
-- `ingestion/`, `validation/`, `anomaly_detection/`, and `auto_healing/` for pipeline logic
-- `ml/` for model training and inference
-- `dashboard/` for a Streamlit UI
+- `data/`, `docs/`, `reports/`, `tests/`, `logs/`, and `deployment/` at the project root
 - `tests/` for unit and integration tests
 
 ## Next steps
