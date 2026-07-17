@@ -4,7 +4,7 @@ import time
 
 class NullValidator(BaseValidator):
     def __init__(self):
-        super().__init__("NullValidator")
+        super().__init__("Null Validator")
 
     def validate(self, df):
         start = time.perf_counter()
@@ -15,16 +15,17 @@ class NullValidator(BaseValidator):
         if status:
             message = "No missing values found."
         else:
-            message = f"Found {null_counts} null values across {df.shape[1]} coloumns"
+            message = f"Found {rows_affected} missing values across {len(null_counts)} columns."
 
         metadata = {
             "null_counts": null_counts.to_dict()
         }
 
         
-        execution_time = time.perf_counter - start
+        execution_time = time.perf_counter() - start
 
         return ValidationResult(
+            validator_name=self.validator_name,
             status=status,
             message=message,
             rows_affected=rows_affected,
