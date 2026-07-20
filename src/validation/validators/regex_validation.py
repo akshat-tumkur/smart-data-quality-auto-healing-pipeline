@@ -1,1 +1,0 @@
-"""Regex validation helpers."""
