@@ -1,5 +1,5 @@
-from .base_validator import BaseValidator
-from .validation_result import ValidationResult
+from ..base_validator import BaseValidator
+from ..validation_result import ValidationResult
 import time
 
 class NullValidator(BaseValidator):

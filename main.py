@@ -1,14 +1,15 @@
 import pandas as pd
-from src.validation.null_validator import NullValidator
+from src.validation.validators.null_validator import NullValidator
 from src.validation.validator_manager import ValidatorManager
+from src.core.pipeline import Pipeline
 
 df = pd.read_csv("data/sample_data/employees.csv")
 null_validator = NullValidator()
-manager = ValidatorManager(validators=[
+validator_manager = ValidatorManager(validators=[
         null_validator
     ])
 
-results = manager.run_validations(df)
-
+results = Pipeline(validation_manager=validator_manager).run(df)
+        
 for result in results: 
     print(result)
