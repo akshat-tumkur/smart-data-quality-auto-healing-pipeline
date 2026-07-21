@@ -1,6 +1,20 @@
 validation_rules:
-  completeness: true
-  uniqueness: true
-  validity: true
-  consistency: true
-  accuracy: true
+  null:
+    enabled: true
+
+  duplicate:
+    enabled: true
+
+  regex:
+    - column: email
+      pattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+
+    - column: phone
+      pattern: "^\\+?[\\d\\s().-]{7,}$"
+
+  datatype:
+    - column: salary
+      type: numeric
+
+    - column: performance_rating
+      type: integer
