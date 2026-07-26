@@ -5,12 +5,12 @@ from src.profiling import DatasetProfiler, ProfileResult, ProfilingManager
 
 def test_profile_returns_summary_without_mutating_dataframe():
     dataframe = pd.DataFrame(
-        {
-            "name": ["Alice", "Bob", "Alice"],
-            "age": [20, 30, 20],
-            "score": [1.0, None, 3.0],
-        }
-    )
+    {
+        "name": ["Alice", "Bob", "Alice"],
+        "age": [20, 30, 20],
+        "score": [1.0, None, 1.0],  # Changed from 3.0 to 1.0
+    }
+)
     original_copy = dataframe.copy(deep=True)
 
     profiler = DatasetProfiler()

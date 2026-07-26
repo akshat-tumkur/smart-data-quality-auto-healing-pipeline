@@ -42,7 +42,7 @@ class DatasetProfiler:
         execution_time = time.perf_counter() - start_time
 
         return ProfileResult(
-            dataset_name=getattr(dataframe, "name", "dataset"),
+            dataset_name=dataframe.attrs.get("dataset_name", "dataset"),
             row_count=row_count,
             column_count=column_count,
             duplicate_rows=duplicate_rows,
