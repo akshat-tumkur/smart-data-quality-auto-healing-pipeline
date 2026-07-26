@@ -6,6 +6,6 @@ class ValidationResult:
         self.rows_affected = rows_affected
         self.execution_time = execution_time
         self.metadata = metadata or {}
-    def __str__(self):
+    def __repr__(self):
         return f"ValidationResult(validator_name={self.validator_name},\n status={self.status},\n message={self.message},\n rows_affected={self.rows_affected},\n execution_time={self.execution_time},\n metadata={self.metadata}\n)"
         

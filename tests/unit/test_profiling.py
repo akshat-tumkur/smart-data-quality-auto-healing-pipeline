@@ -1,6 +1,6 @@
 import pandas as pd
 
-from src.profiling import DatasetProfiler, ProfileResult, ProfilingManager
+from profiling import DatasetProfiler, ProfileResult, ProfilingManager
 
 
 def test_profile_returns_summary_without_mutating_dataframe():
@@ -8,7 +8,7 @@ def test_profile_returns_summary_without_mutating_dataframe():
         {
             "name": ["Alice", "Bob", "Alice"],
             "age": [20, 30, 20],
-            "score": [1.0, None, 3.0],
+            "score": [1.0, None, 1.0],
         }
     )
     original_copy = dataframe.copy(deep=True)

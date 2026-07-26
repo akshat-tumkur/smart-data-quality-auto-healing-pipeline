@@ -1,7 +1,6 @@
 from pathlib import Path
 import sys
 
-
 PROJECT_ROOT = Path(__file__).resolve().parent
 SRC_DIR = PROJECT_ROOT / "src"
 
@@ -10,12 +9,14 @@ if str(SRC_DIR) not in sys.path:
 
 from config.config_loader import load_config
 from ingestion.ingestion_manager import IngestionManager
-from src.validation.validators.datatype_validator import DataTypeValidator
-from src.validation.validators.duplicate_validator import DuplicateValidator
-from src.validation.validators.null_validator import NullValidator
-from src.validation.validators.regex_validator import RegexValidator
-from src.validation.validator_manager import ValidatorManager
-from src.core.pipeline import Pipeline
+from validation.validators.datatype_validator import DataTypeValidator
+from validation.validators.duplicate_validator import DuplicateValidator
+from validation.validators.null_validator import NullValidator
+from validation.validators.regex_validator import RegexValidator
+from profiling.dataset_profiler import DatasetProfiler
+from validation.validator_manager import ValidatorManager
+from profiling.profiling_manager import ProfilingManager
+from core.pipeline import Pipeline
 
 
 def load_runtime_config() -> dict:
@@ -55,15 +56,19 @@ def build_validators(config) -> list:
 def main() -> None:
     config = load_runtime_config()
 
-    manager = IngestionManager(config)
-    data = manager.ingest()
-
+    ingestion_manager = IngestionManager(config)
+    data = ingestion_manager.ingest()
+    profiler = DatasetProfiler()
+    profiling_manager = ProfilingManager(profiler=profiler)
     validators = build_validators(config)
     validator_manager = ValidatorManager(validators=validators)
-    results = Pipeline(validation_manager=validator_manager).run(data)
+    pipeline = Pipeline(
+        profiling_manager=profiling_manager,
+        validation_manager=validator_manager
+                         )
+    results = pipeline.run(data)
 
-    for result in results:
-        print(result)
+    print(results)
 
 
 if __name__ == "__main__":
