@@ -16,3 +16,4 @@ data/rejected/*
 !data/cleaned/.gitkeep
 !data/rejected/.gitkeep
 !data/sample_data/.gitkeep
+reports/*

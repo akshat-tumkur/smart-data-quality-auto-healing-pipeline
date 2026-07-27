@@ -17,6 +17,8 @@ from profiling.dataset_profiler import DatasetProfiler
 from validation.validator_manager import ValidatorManager
 from profiling.profiling_manager import ProfilingManager
 from core.pipeline import Pipeline
+from reporting.report_generator import ReportGenerator
+from reporting.report_manager import ReportManager
 
 
 def load_runtime_config() -> dict:
@@ -54,21 +56,48 @@ def build_validators(config) -> list:
 
 
 def main() -> None:
-    config = load_runtime_config()
+    try:
+        config = load_runtime_config()
 
-    ingestion_manager = IngestionManager(config)
-    data = ingestion_manager.ingest()
-    profiler = DatasetProfiler()
-    profiling_manager = ProfilingManager(profiler=profiler)
-    validators = build_validators(config)
-    validator_manager = ValidatorManager(validators=validators)
-    pipeline = Pipeline(
-        profiling_manager=profiling_manager,
-        validation_manager=validator_manager
-                         )
-    results = pipeline.run(data)
+        ingestion_manager = IngestionManager(config)
+        data = ingestion_manager.ingest()
+        profiler = DatasetProfiler()
+        profiling_manager = ProfilingManager(profiler=profiler)
+        validators = build_validators(config)
+        validator_manager = ValidatorManager(validators=validators)
+        pipeline = Pipeline(
+            profiling_manager=profiling_manager,
+            validation_manager=validator_manager,
+        )
+        pipeline_result = pipeline.run(data)
 
-    print(results)
+        generator = ReportGenerator()
+        manager = ReportManager(generator)
+        report = manager.generate_report(pipeline_result)
+        saved_path = manager.save(report)
+
+        profile_result = pipeline_result.profile_result
+        validation_results = pipeline_result.validation_results
+        passed = sum(1 for result in validation_results if bool(getattr(result, "status", False)))
+        failed = len(validation_results) - passed
+
+        print("========================================")
+        print("SMART DATA QUALITY PIPELINE COMPLETED")
+        print("========================================")
+        print()
+        print(f"Dataset Rows      : {getattr(profile_result, 'row_count', 0)}")
+        print(f"Dataset Columns   : {getattr(profile_result, 'column_count', 0)}")
+        print()
+        print(f"Validators Run    : {len(validation_results)}")
+        print(f"Passed            : {passed}")
+        print(f"Failed            : {failed}")
+        print()
+        print("Report saved to:")
+        print()
+        print(saved_path)
+    except Exception as exc:
+        print(f"Pipeline execution failed: {exc}")
+        raise
 
 
 if __name__ == "__main__":
