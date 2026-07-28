@@ -1,6 +1,8 @@
 from pathlib import Path
 import sys
 
+import pandas as pd
+
 PROJECT_ROOT = Path(__file__).resolve().parent
 SRC_DIR = PROJECT_ROOT / "src"
 
@@ -30,12 +32,14 @@ from reporting.report_manager import ReportManager
 
 def load_runtime_config() -> dict:
     config = load_config(str(PROJECT_ROOT / "config" / "pipeline_config.yaml"))
-    validation_rules = load_config(str(PROJECT_ROOT / "config" / "validation_rules.yaml"))
+    validation_rules = load_config(
+        str(PROJECT_ROOT / "config" / "validation_rules.yaml")
+    )
     config["validation_rules"] = validation_rules.get("validation_rules", {})
     return config
 
 
-def build_validators(config) -> list:
+def build_validators(config: dict) -> list[object]:
     validation_rules = config.get("validation_rules", {})
     validators = []
 
@@ -75,6 +79,41 @@ def build_healers() -> HealerManager:
     )
 
 
+def build_cleaned_dataset_path(
+    config: dict,
+    output_directory: Path | None = None,
+) -> Path:
+    """Build a cleaned CSV path without targeting the raw source file."""
+
+    output_path = output_directory or PROJECT_ROOT / "data" / "cleaned"
+    source_path = config.get("pipeline", {}).get("csv", {}).get("file_path")
+
+    if source_path:
+        source_name = Path(source_path).stem
+        filename = f"{source_name}_cleaned.csv"
+    else:
+        filename = "dataset_cleaned.csv"
+
+    return output_path / filename
+
+
+def save_healed_dataframe(dataframe: pd.DataFrame, output_path: Path) -> str:
+    """Persist the healed DataFrame as CSV and return the saved path."""
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    dataframe.to_csv(output_path, index=False)
+    return str(output_path)
+
+
+def count_validation_statuses(validation_results: list[object]) -> tuple[int, int]:
+    """Return passed and failed validation counts."""
+
+    passed = sum(
+        1 for result in validation_results if bool(getattr(result, "status", False))
+    )
+    return passed, len(validation_results) - passed
+
+
 def main() -> None:
     try:
         config = load_runtime_config()
@@ -97,31 +136,31 @@ def main() -> None:
         manager = ReportManager(generator)
         report = manager.generate_report(pipeline_result)
         saved_path = manager.save(report)
+        cleaned_dataset_path = save_healed_dataframe(
+            pipeline_result.healed_dataframe,
+            build_cleaned_dataset_path(config),
+        )
 
-        profile_result = pipeline_result.profile_result
-        validation_results = pipeline_result.validation_results
+        profile_result = pipeline_result.initial_profile
+        validation_results = pipeline_result.final_validation
         healing_results = pipeline_result.healing_results
-        passed = sum(1 for result in validation_results if bool(getattr(result, "status", False)))
-        failed = len(validation_results) - passed
-        healed_success = sum(1 for result in healing_results if getattr(result, "status", "") == "success")
-        healed_failed = len(healing_results) - healed_success
+        passed, failed = count_validation_statuses(validation_results)
 
         print("========================================")
         print("SMART DATA QUALITY PIPELINE COMPLETED")
         print("========================================")
         print()
-        print(f"Dataset Rows      : {getattr(profile_result, 'row_count', 0)}")
-        print(f"Dataset Columns   : {getattr(profile_result, 'column_count', 0)}")
+        print(f"Rows Processed : {getattr(profile_result, 'row_count', 0)}")
+        print(f"Validators Run : {len(validation_results)}")
+        print(f"Validators OK  : {passed}")
+        print(f"Validators Fail: {failed}")
+        print(f"Healers Run    : {len(healing_results)}")
         print()
-        print(f"Validators Run    : {len(validation_results)}")
-        print(f"Passed            : {passed}")
-        print(f"Failed            : {failed}")
+        print("Cleaned Dataset:")
         print()
-        print(f"Healers Run       : {len(healing_results)}")
-        print(f"Succeeded         : {healed_success}")
-        print(f"Failed            : {healed_failed}")
+        print(cleaned_dataset_path)
         print()
-        print("Report saved to:")
+        print("Report:")
         print()
         print(saved_path)
     except Exception as exc:
