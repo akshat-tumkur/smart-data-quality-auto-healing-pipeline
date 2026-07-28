@@ -17,6 +17,13 @@ from profiling.dataset_profiler import DatasetProfiler
 from validation.validator_manager import ValidatorManager
 from profiling.profiling_manager import ProfilingManager
 from core.pipeline import Pipeline
+from auto_healing import (
+    DatatypeHealer,
+    DuplicateHealer,
+    HealerManager,
+    MissingValueHealer,
+    RegexHealer,
+)
 from reporting.report_generator import ReportGenerator
 from reporting.report_manager import ReportManager
 
@@ -55,6 +62,19 @@ def build_validators(config) -> list:
     return validators
 
 
+def build_healers() -> HealerManager:
+    """Build the default auto-healing plugin chain."""
+
+    return HealerManager(
+        [
+            MissingValueHealer(),
+            DuplicateHealer(),
+            DatatypeHealer(),
+            RegexHealer(),
+        ]
+    )
+
+
 def main() -> None:
     try:
         config = load_runtime_config()
@@ -65,9 +85,11 @@ def main() -> None:
         profiling_manager = ProfilingManager(profiler=profiler)
         validators = build_validators(config)
         validator_manager = ValidatorManager(validators=validators)
+        healer_manager = build_healers()
         pipeline = Pipeline(
             profiling_manager=profiling_manager,
             validation_manager=validator_manager,
+            healer_manager=healer_manager,
         )
         pipeline_result = pipeline.run(data)
 
@@ -78,8 +100,11 @@ def main() -> None:
 
         profile_result = pipeline_result.profile_result
         validation_results = pipeline_result.validation_results
+        healing_results = pipeline_result.healing_results
         passed = sum(1 for result in validation_results if bool(getattr(result, "status", False)))
         failed = len(validation_results) - passed
+        healed_success = sum(1 for result in healing_results if getattr(result, "status", "") == "success")
+        healed_failed = len(healing_results) - healed_success
 
         print("========================================")
         print("SMART DATA QUALITY PIPELINE COMPLETED")
@@ -91,6 +116,10 @@ def main() -> None:
         print(f"Validators Run    : {len(validation_results)}")
         print(f"Passed            : {passed}")
         print(f"Failed            : {failed}")
+        print()
+        print(f"Healers Run       : {len(healing_results)}")
+        print(f"Succeeded         : {healed_success}")
+        print(f"Failed            : {healed_failed}")
         print()
         print("Report saved to:")
         print()

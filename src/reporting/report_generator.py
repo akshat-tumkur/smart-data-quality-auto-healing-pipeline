@@ -12,11 +12,13 @@ class ReportGenerator:
         """Return a human-readable report for the supplied pipeline result."""
 
         profile_result = self._get_profile_result(pipeline_result)
+        healing_results = self._get_healing_results(pipeline_result)
         validation_results = self._get_validation_results(pipeline_result)
 
         sections = [
             self._render_title(),
             self._render_dataset_summary(profile_result),
+            self._render_healing_results(healing_results),
             self._render_validation_results(validation_results),
             self._render_summary(validation_results),
         ]
@@ -52,6 +54,57 @@ class ReportGenerator:
             ]
         )
         return "\n".join(lines)
+
+    def _render_healing_results(self, healing_results: Iterable[Any]) -> str:
+        lines = [
+            "----------------------------------------------------",
+            "AUTO-HEALING RESULTS",
+            "----------------------------------------------------",
+            "",
+        ]
+
+        results = list(healing_results)
+        if not results:
+            lines.append("No healing results available.")
+            lines.append("")
+            return "\n".join(lines)
+
+        successful = sum(1 for result in results if self._get_value(result, "status", "") == "success")
+        failed = len(results) - successful
+        lines.extend(
+            [
+                self._format_metric("Healers Run", len(results)),
+                self._format_metric("Succeeded", successful),
+                self._format_metric("Failed", failed),
+                "",
+            ]
+        )
+
+        for index, healing_result in enumerate(results):
+            lines.extend(self._render_healing_result(healing_result))
+            if index < len(results) - 1:
+                lines.append("----------------------------------------------------")
+                lines.append("")
+
+        return "\n".join(lines)
+
+    def _render_healing_result(self, healing_result: Any) -> list[str]:
+        healer_name = self._get_value(healing_result, "healer_name", "Healer")
+        status = self._get_value(healing_result, "status", "failed")
+        rows_affected = self._get_value(healing_result, "rows_affected", 0)
+        message = self._get_value(healing_result, "message", "")
+
+        status_label = str(status).upper()
+        status_icon = "✅" if status == "success" else "❌"
+
+        return [
+            f"{status_icon} {healer_name}",
+            "",
+            self._format_metric("Status", status_label),
+            self._format_metric("Affected Rows", rows_affected),
+            "",
+            self._format_metric("Message", message or "No message provided."),
+        ]
 
     def _render_validation_results(self, validation_results: Iterable[Any]) -> str:
         lines = [
@@ -119,6 +172,12 @@ class ReportGenerator:
 
     def _get_validation_results(self, pipeline_result: Any) -> list[Any]:
         results = self._get_value(pipeline_result, "validation_results", [])
+        if results is None:
+            return []
+        return list(results)
+
+    def _get_healing_results(self, pipeline_result: Any) -> list[Any]:
+        results = self._get_value(pipeline_result, "healing_results", [])
         if results is None:
             return []
         return list(results)

@@ -72,7 +72,8 @@ class MissingValueHealer(BaseHealer):
                     elif self.strategy == "median":
                         fill_value = series.median(skipna=True)
                     else:
-                        fill_value = series.mode(dropna=True).iloc[0] if not series.mode(dropna=True).empty else None
+                        m = series.mode(dropna=True)
+                        fill_value = m.iloc[0] if not m.empty else None
                 else:
                     mode_values = series.mode(dropna=True)
                     fill_value = mode_values.iloc[0] if not mode_values.empty else None
