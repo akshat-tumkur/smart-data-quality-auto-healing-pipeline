@@ -9,74 +9,21 @@ SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from config.config_loader import load_config
+from config.config_loader import load_application_config
 from ingestion.ingestion_manager import IngestionManager
-from validation.validators.datatype_validator import DataTypeValidator
-from validation.validators.duplicate_validator import DuplicateValidator
-from validation.validators.null_validator import NullValidator
-from validation.validators.regex_validator import RegexValidator
 from profiling.dataset_profiler import DatasetProfiler
 from validation.validator_manager import ValidatorManager
 from profiling.profiling_manager import ProfilingManager
 from core.pipeline import Pipeline
-from auto_healing import (
-    DatatypeHealer,
-    DuplicateHealer,
-    HealerManager,
-    MissingValueHealer,
-    RegexHealer,
-)
+from auto_healing import HealerManager
+from auto_healing.healer_factory import HealerFactory
 from reporting.report_generator import ReportGenerator
 from reporting.report_manager import ReportManager
+from validation.validator_factory import ValidatorFactory
 
 
 def load_runtime_config() -> dict:
-    config = load_config(str(PROJECT_ROOT / "config" / "pipeline_config.yaml"))
-    validation_rules = load_config(
-        str(PROJECT_ROOT / "config" / "validation_rules.yaml")
-    )
-    config["validation_rules"] = validation_rules.get("validation_rules", {})
-    return config
-
-
-def build_validators(config: dict) -> list[object]:
-    validation_rules = config.get("validation_rules", {})
-    validators = []
-
-    null_rules = validation_rules.get("null", {})
-    if null_rules.get("enabled", False):
-        validators.append(NullValidator())
-
-    duplicate_rules = validation_rules.get("duplicate", {})
-    if duplicate_rules.get("enabled", False):
-        validators.append(DuplicateValidator())
-
-    for rule in validation_rules.get("regex", []):
-        column_name = rule.get("column")
-        pattern = rule.get("pattern")
-        if column_name and pattern:
-            validators.append(RegexValidator(column_name, pattern))
-
-    for rule in validation_rules.get("datatype", []):
-        column_name = rule.get("column")
-        expected_type = rule.get("type")
-        if column_name and expected_type:
-            validators.append(DataTypeValidator(column_name, expected_type))
-
-    return validators
-
-
-def build_healers() -> HealerManager:
-    """Build the default auto-healing plugin chain."""
-
-    return HealerManager(
-        [
-            MissingValueHealer(),
-            DuplicateHealer(),
-            DatatypeHealer(),
-            RegexHealer(),
-        ]
-    )
+    return load_application_config()
 
 
 def build_cleaned_dataset_path(
@@ -86,7 +33,9 @@ def build_cleaned_dataset_path(
     """Build a cleaned CSV path without targeting the raw source file."""
 
     output_path = output_directory or PROJECT_ROOT / "data" / "cleaned"
-    source_path = config.get("pipeline", {}).get("csv", {}).get("file_path")
+    source_path = config.get("dataset", {}).get("path")
+    if source_path is None:
+        source_path = config.get("pipeline", {}).get("csv", {}).get("file_path")
 
     if source_path:
         source_name = Path(source_path).stem
@@ -122,13 +71,22 @@ def main() -> None:
         data = ingestion_manager.ingest()
         profiler = DatasetProfiler()
         profiling_manager = ProfilingManager(profiler=profiler)
-        validators = build_validators(config)
+
+        validator_factory = ValidatorFactory(config["validation"])
+        validators = validator_factory.build()
         validator_manager = ValidatorManager(validators=validators)
-        healer_manager = build_healers()
+
+        healer_factory = HealerFactory(
+            healing_config=config["healing"],
+            validation_config=config["validation"],
+        )
+        healer_manager = HealerManager(healer_factory.build())
+
         pipeline = Pipeline(
             profiling_manager=profiling_manager,
             validation_manager=validator_manager,
             healer_manager=healer_manager,
+            config=config,
         )
         pipeline_result = pipeline.run(data)
 

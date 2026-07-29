@@ -11,10 +11,12 @@ class Pipeline:
         profiling_manager: Any,
         validation_manager: Any,
         healer_manager: Any,
+        config: dict[str, Any] | None = None,
     ) -> None:
         self.profiling_manager = profiling_manager
         self.validation_manager = validation_manager
         self.healer_manager = healer_manager
+        self.config = config or {}
 
     def run(self, dataframe: pd.DataFrame) -> PipelineResult:
         initial_profile = self.profiling_manager.run_profiling(dataframe)

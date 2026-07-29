@@ -1,0 +1,16 @@
+healing:
+  missing:
+    enabled: true
+    strategy: median
+
+  duplicate:
+    enabled: true
+
+  datatype:
+    enabled: true
+
+  regex:
+    enabled: true
+    lowercase_email: true
+    trim_whitespace: true
+    remove_phone_symbols: true

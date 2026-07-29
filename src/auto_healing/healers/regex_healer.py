@@ -16,10 +16,19 @@ class RegexHealer(BaseHealer):
 
     display_name = "Regex Healer"
 
-    def __init__(self, columns: Sequence[str] | None = None) -> None:
+    def __init__(
+        self,
+        columns: Sequence[str] | None = None,
+        lowercase_email: bool = True,
+        trim_whitespace: bool = True,
+        remove_phone_symbols: bool = True,
+    ) -> None:
         """Initialize the healer with an optional subset of columns."""
 
         self.columns = list(columns) if columns is not None else None
+        self.lowercase_email = lowercase_email
+        self.trim_whitespace = trim_whitespace
+        self.remove_phone_symbols = remove_phone_symbols
 
     def heal(self, dataframe: pd.DataFrame) -> tuple[pd.DataFrame, HealingResult]:
         """Normalize strings and return the updated DataFrame and result."""
@@ -48,20 +57,29 @@ class RegexHealer(BaseHealer):
                     continue
 
                 normalized_series = series.astype("string")
-                transformed_series = normalized_series.str.strip()
+                transformed_series = normalized_series
 
                 lowered_name = column.lower()
-                operations: list[str] = ["strip_whitespace"]
-                if "email" in lowered_name:
+                operations: list[str] = []
+                if self.trim_whitespace:
+                    transformed_series = transformed_series.str.strip()
+                    operations.append("trim_whitespace")
+                if self.lowercase_email and "email" in lowered_name:
                     transformed_series = transformed_series.str.lower()
                     operations.append("lowercase_email")
-                if any(token in lowered_name for token in ("phone", "mobile", "tel")):
+                if self.remove_phone_symbols and any(
+                    token in lowered_name for token in ("phone", "mobile", "tel")
+                ):
                     transformed_series = transformed_series.str.replace(
-                        r"[\s-]+",
+                        r"[^\d+]+",
                         "",
                         regex=True,
                     )
-                    operations.append("normalize_phone")
+                    operations.append("remove_phone_symbols")
+
+                if not operations:
+                    skipped_columns[column] = "No regex healing operations enabled."
+                    continue
 
                 changed_mask = normalized_series.notna() & (
                     transformed_series.astype(object) != normalized_series.astype(object)
@@ -85,6 +103,11 @@ class RegexHealer(BaseHealer):
             metadata = {
                 "transformed_columns": transformed_columns,
                 "skipped_columns": skipped_columns,
+                "options": {
+                    "lowercase_email": self.lowercase_email,
+                    "trim_whitespace": self.trim_whitespace,
+                    "remove_phone_symbols": self.remove_phone_symbols,
+                },
             }
             return (
                 working_dataframe,

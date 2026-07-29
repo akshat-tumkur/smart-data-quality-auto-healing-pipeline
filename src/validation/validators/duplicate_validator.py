@@ -1,14 +1,18 @@
-from ..base_validator import BaseValidator
-from ..validation_result import ValidationResult
 import time
 
+
+from ..base_validator import BaseValidator
+from ..validation_result import ValidationResult
+
+
 class DuplicateValidator(BaseValidator):
-    def __init__(self):
+    def __init__(self, subset=None) -> None:
         super().__init__("Duplicate Validator")
-    
+        self.subset = list(subset) if subset is not None else None
+
     def validate(self, df):
         start = time.perf_counter()
-        duplicate_rows = df.duplicated(keep=False)
+        duplicate_rows = df.duplicated(subset=self.subset, keep=False)
         rows_affected = duplicate_rows.sum()
         status = rows_affected == 0
         if status:
@@ -17,7 +21,8 @@ class DuplicateValidator(BaseValidator):
             message = f"Found {rows_affected} duplicate rows."
 
         metadata = {
-        "duplicate_indices": df[duplicate_rows].index.tolist()
+            "duplicate_indices": df[duplicate_rows].index.tolist(),
+            "subset": self.subset,
         }
 
         execution_time = time.perf_counter() - start
@@ -28,5 +33,5 @@ class DuplicateValidator(BaseValidator):
             message=message,
             rows_affected=rows_affected,
             execution_time=execution_time,
-            metadata=metadata
+            metadata=metadata,
         )

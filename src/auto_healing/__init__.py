@@ -1,6 +1,7 @@
 """Standalone auto-healing engine for DataFrame repair plugins."""
 
 from auto_healing.base_healer import BaseHealer
+from auto_healing.healer_factory import HealerFactory
 from auto_healing.healer_manager import HealerManager
 from auto_healing.healing_result import HealingResult
 from auto_healing.healers.datatype_healer import DatatypeHealer
@@ -12,6 +13,7 @@ __all__ = [
 	"BaseHealer",
 	"DatatypeHealer",
 	"DuplicateHealer",
+	"HealerFactory",
 	"HealerManager",
 	"HealingResult",
 	"MissingValueHealer",

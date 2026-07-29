@@ -1,20 +1,19 @@
-validation_rules:
-  null:
+validation:
+  "null":
     enabled: true
 
   duplicate:
     enabled: true
 
+  datatype:
+    enabled: true
+    columns:
+      salary: float
+      performance_rating: int
+
   regex:
     - column: email
-      pattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+      pattern: EMAIL
 
     - column: phone
-      pattern: "^\\+?[\\d\\s().-]{7,}$"
-
-  datatype:
-    - column: salary
-      type: numeric
-
-    - column: performance_rating
-      type: integer
+      pattern: PHONE
