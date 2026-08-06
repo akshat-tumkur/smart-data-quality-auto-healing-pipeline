@@ -17,8 +17,10 @@ class ReportGenerator:
         final_profile = self._get_final_profile(pipeline_result)
         final_validation = self._get_final_validation(pipeline_result)
 
+        schema_result = self._get_schema_result(pipeline_result)
         sections = [
             self._render_title(),
+            self._render_schema_section(schema_result),
             self._render_dataset_section(
                 "INITIAL DATASET",
                 initial_profile,
@@ -255,6 +257,67 @@ class ReportGenerator:
             "initial_profile",
             self._get_value(pipeline_result, "profile_result", None),
         )
+
+    def _get_schema_result(self, pipeline_result: Any) -> Any:
+        return self._get_value(
+            pipeline_result,
+            "initial_schema_result",
+            self._get_value(pipeline_result, "schema_result", None),
+        )
+
+    def _render_schema_section(self, schema_result: Any) -> str:
+        lines = [
+            "====================================================",
+            "SCHEMA VALIDATION",
+            "====================================================",
+            "",
+        ]
+
+        if schema_result is None:
+            lines.extend([
+                "No schema validation results available.",
+                "",
+            ])
+            return "\n".join(lines)
+
+        status = "PASSED" if bool(self._get_value(schema_result, "status", False)) else "FAILED"
+        missing_columns = self._get_value(schema_result, "missing_columns", [])
+        unexpected_columns = self._get_value(schema_result, "unexpected_columns", [])
+        datatype_mismatches = self._get_value(schema_result, "datatype_mismatches", {})
+
+        lines.extend([
+            self._format_metric("Status", status),
+            self._format_metric(
+                "Missing Columns",
+                ", ".join(missing_columns) if missing_columns else "None",
+            ),
+            self._format_metric(
+                "Unexpected Columns",
+                ", ".join(unexpected_columns) if unexpected_columns else "None",
+            ),
+            self._format_metric(
+                "Datatype Mismatches",
+                self._format_datatype_mismatches(datatype_mismatches),
+            ),
+            self._format_metric(
+                "Execution Time",
+                self._get_value(schema_result, "execution_time", 0.0),
+            ),
+        ])
+
+        return "\n".join(lines)
+
+    def _format_datatype_mismatches(self, datatype_mismatches: Any) -> str:
+        if not datatype_mismatches:
+            return "None"
+
+        mismatch_parts = []
+        for column, mismatch in datatype_mismatches.items():
+            expected = mismatch.get("expected")
+            actual = mismatch.get("actual")
+            mismatch_parts.append(f"{column}: expected={expected}, actual={actual}")
+
+        return "; ".join(mismatch_parts)
 
     def _get_final_profile(self, pipeline_result: Any) -> Any:
         return self._get_value(

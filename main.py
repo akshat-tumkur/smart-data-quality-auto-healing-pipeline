@@ -19,6 +19,8 @@ from auto_healing import HealerManager
 from auto_healing.healer_factory import HealerFactory
 from reporting.report_generator import ReportGenerator
 from reporting.report_manager import ReportManager
+from schema.schema_manager import SchemaManager
+from schema.schema_validator import SchemaValidator
 from validation.validator_factory import ValidatorFactory
 
 
@@ -76,6 +78,9 @@ def main() -> None:
         validators = validator_factory.build()
         validator_manager = ValidatorManager(validators=validators)
 
+        schema_validator = SchemaValidator()
+        schema_manager = SchemaManager(schema_validator=schema_validator)
+
         healer_factory = HealerFactory(
             healing_config=config["healing"],
             validation_config=config["validation"],
@@ -86,6 +91,7 @@ def main() -> None:
             profiling_manager=profiling_manager,
             validation_manager=validator_manager,
             healer_manager=healer_manager,
+            schema_manager=schema_manager,
             config=config,
         )
         pipeline_result = pipeline.run(data)

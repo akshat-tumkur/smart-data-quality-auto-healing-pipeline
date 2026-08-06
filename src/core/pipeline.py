@@ -11,14 +11,27 @@ class Pipeline:
         profiling_manager: Any,
         validation_manager: Any,
         healer_manager: Any,
+        schema_manager: Any,
         config: dict[str, Any] | None = None,
     ) -> None:
         self.profiling_manager = profiling_manager
         self.validation_manager = validation_manager
         self.healer_manager = healer_manager
+        self.schema_manager = schema_manager
         self.config = config or {}
 
     def run(self, dataframe: pd.DataFrame) -> PipelineResult:
+        schema_result = self.schema_manager.run_schema_validation(
+            dataframe,
+            self.config.get("validation", {}),
+        )
+
+        if schema_result.missing_columns:
+            return PipelineResult(
+                dataframe=dataframe,
+                initial_schema_result=schema_result,
+            )
+
         initial_profile = self.profiling_manager.run_profiling(dataframe)
         initial_validation = self.validation_manager.run_validations(dataframe)
         healed_dataframe = dataframe
@@ -32,6 +45,7 @@ class Pipeline:
 
         return PipelineResult(
             dataframe=dataframe,
+            initial_schema_result=schema_result,
             initial_profile=initial_profile,
             initial_validation=initial_validation,
             healed_dataframe=healed_dataframe,
