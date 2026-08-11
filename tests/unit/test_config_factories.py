@@ -24,6 +24,8 @@ def test_config_loader_normalizes_dataset_and_yaml_null_key(tmp_path):
 
     assert config["dataset"]["path"] == "data/raw/example.csv"
     assert config["dataset"]["delimiter"] == ","
+    assert config["schema"]["allow_extra_columns"] is True
+    assert config["schema"]["columns"] == {}
     assert config["validation"]["null"]["enabled"] is True
     assert config["healing"]["missing"]["enabled"] is False
 

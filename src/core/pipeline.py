@@ -23,7 +23,7 @@ class Pipeline:
     def run(self, dataframe: pd.DataFrame) -> PipelineResult:
         schema_result = self.schema_manager.run_schema_validation(
             dataframe,
-            self.config.get("validation", {}),
+            self.config.get("schema", {}),
         )
 
         if schema_result.missing_columns:

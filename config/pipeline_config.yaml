@@ -10,3 +10,58 @@ dataset:
   delimiter: ","
   encoding: utf-8
   has_header: true
+
+schema:
+  allow_extra_columns: true
+  columns:
+    employee_id:
+      type: string
+      nullable: false
+    first_name:
+      type: string
+      nullable: false
+    last_name:
+      type: string
+      nullable: false
+    email:
+      type: string
+      nullable: false
+    phone:
+      type: string
+      nullable: true
+    gender:
+      type: string
+      nullable: false
+    age:
+      type: int
+      nullable: false
+    department:
+      type: string
+      nullable: true
+    designation:
+      type: string
+      nullable: false
+    salary:
+      type: numeric
+      nullable: false
+    joining_date:
+      type: string
+      nullable: false
+    city:
+      type: string
+      nullable: false
+    state:
+      type: string
+      nullable: false
+    country:
+      type: string
+      nullable: false
+    manager_id:
+      type: string
+      nullable: false
+    employment_type:
+      type: string
+      nullable: false
+    performance_rating:
+      type: int
+      nullable: true

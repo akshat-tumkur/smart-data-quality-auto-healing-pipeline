@@ -284,6 +284,7 @@ class ReportGenerator:
         missing_columns = self._get_value(schema_result, "missing_columns", [])
         unexpected_columns = self._get_value(schema_result, "unexpected_columns", [])
         datatype_mismatches = self._get_value(schema_result, "datatype_mismatches", {})
+        nullable_violations = self._get_value(schema_result, "nullable_violations", {})
 
         lines.extend([
             self._format_metric("Status", status),
@@ -298,6 +299,10 @@ class ReportGenerator:
             self._format_metric(
                 "Datatype Mismatches",
                 self._format_datatype_mismatches(datatype_mismatches),
+            ),
+            self._format_metric(
+                "Nullable Violations",
+                self._format_nullable_violations(nullable_violations),
             ),
             self._format_metric(
                 "Execution Time",
@@ -318,6 +323,17 @@ class ReportGenerator:
             mismatch_parts.append(f"{column}: expected={expected}, actual={actual}")
 
         return "; ".join(mismatch_parts)
+
+    def _format_nullable_violations(self, nullable_violations: Any) -> str:
+        if not nullable_violations:
+            return "None"
+
+        violation_parts = []
+        for column, violation in nullable_violations.items():
+            null_count = violation.get("null_count", 0)
+            violation_parts.append(f"{column}: null_count={null_count}")
+
+        return "; ".join(violation_parts)
 
     def _get_final_profile(self, pipeline_result: Any) -> Any:
         return self._get_value(

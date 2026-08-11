@@ -15,6 +15,7 @@ class SchemaResult:
         missing_columns: list[str] | None = None,
         unexpected_columns: list[str] | None = None,
         datatype_mismatches: dict[str, dict[str, str]] | None = None,
+        nullable_violations: dict[str, dict[str, int | bool]] | None = None,
         execution_time: float = 0.0,
         metadata: dict[str, Any] | None = None,
     ) -> None:
@@ -23,6 +24,7 @@ class SchemaResult:
         self.missing_columns = missing_columns or []
         self.unexpected_columns = unexpected_columns or []
         self.datatype_mismatches = datatype_mismatches or {}
+        self.nullable_violations = nullable_violations or {}
         self.execution_time = execution_time
         self.metadata = metadata or {}
 
@@ -33,6 +35,7 @@ class SchemaResult:
             f"missing_columns={self.missing_columns}",
             f"unexpected_columns={self.unexpected_columns}",
             f"datatype_mismatches={self.datatype_mismatches}",
+            f"nullable_violations={self.nullable_violations}",
             f"execution_time={self.execution_time}",
             f"metadata={self.metadata}",
         ]

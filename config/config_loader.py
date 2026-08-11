@@ -26,19 +26,20 @@ class ConfigLoader:
     def load(self) -> dict[str, Any]:
         """Load all application configuration once."""
 
-        pipeline = self._normalize_pipeline(
-            self._load_yaml("pipeline_config.yaml", required=True)
-        )
+        raw_pipeline = self._load_yaml("pipeline_config.yaml", required=True)
+        pipeline = self._normalize_pipeline(raw_pipeline)
         validation = self._normalize_validation(
             self._load_yaml("validation_rules.yaml", required=True)
         )
         healing = self._normalize_healing(
             self._load_yaml("healing_rules.yaml", required=False)
         )
+        schema = self._normalize_schema(raw_pipeline)
 
         return {
             "pipeline": pipeline,
             "dataset": pipeline["dataset"],
+            "schema": schema,
             "validation": validation,
             "healing": healing,
             # Backward-compatible keys used by earlier code.
@@ -125,6 +126,34 @@ class ConfigLoader:
         healing.setdefault("datatype", {"enabled": False})
         healing.setdefault("regex", {"enabled": False})
         return healing
+
+    def _normalize_schema(self, raw_config: dict[str, Any]) -> dict[str, Any]:
+        schema = dict(raw_config.get("schema", {}))
+        schema.setdefault("allow_extra_columns", True)
+
+        columns = schema.get("columns", {})
+        if not isinstance(columns, dict):
+            raise ConfigurationError("schema.columns must be a mapping of column definitions.")
+
+        normalized_columns: dict[str, Any] = {}
+        for column_name, definition in columns.items():
+            if not isinstance(definition, dict):
+                raise ConfigurationError(
+                    f"schema.columns.{column_name} must be a mapping with type and nullable fields."
+                )
+
+            column_type = definition.get("type")
+            if column_type is None:
+                raise ConfigurationError(f"schema.columns.{column_name}.type is required.")
+
+            nullable = definition.get("nullable", True)
+            normalized_columns[column_name] = {
+                "type": str(column_type),
+                "nullable": bool(nullable),
+            }
+
+        schema["columns"] = normalized_columns
+        return schema
 
 
 def load_config(file_path: str) -> dict[str, Any]:
