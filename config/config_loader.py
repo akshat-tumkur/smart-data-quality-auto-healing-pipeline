@@ -35,11 +35,13 @@ class ConfigLoader:
             self._load_yaml("healing_rules.yaml", required=False)
         )
         schema = self._normalize_schema(raw_pipeline)
+        anomaly_detection = self._normalize_anomaly_detection(raw_pipeline)
 
         return {
             "pipeline": pipeline,
             "dataset": pipeline["dataset"],
             "schema": schema,
+            "anomaly_detection": anomaly_detection,
             "validation": validation,
             "healing": healing,
             # Backward-compatible keys used by earlier code.
@@ -154,6 +156,26 @@ class ConfigLoader:
 
         schema["columns"] = normalized_columns
         return schema
+
+    def _normalize_anomaly_detection(self, raw_config: dict[str, Any]) -> dict[str, Any]:
+        anomaly_detection = dict(raw_config.get("anomaly_detection", {}))
+        anomaly_detection.setdefault("enabled", False)
+        anomaly_detection.setdefault("method", "isolation_forest")
+        anomaly_detection.setdefault("contamination", 0.05)
+        anomaly_detection.setdefault("random_state", 42)
+
+        contamination = float(anomaly_detection["contamination"])
+        if not 0 < contamination <= 0.5:
+            raise ConfigurationError(
+                "anomaly_detection.contamination must be greater than 0 and at most 0.5."
+            )
+        anomaly_detection["contamination"] = contamination
+        anomaly_detection["random_state"] = int(anomaly_detection["random_state"])
+        if anomaly_detection["method"] != "isolation_forest":
+            raise ConfigurationError(
+                "Only anomaly_detection.method=isolation_forest is currently supported."
+            )
+        return anomaly_detection
 
 
 def load_config(file_path: str) -> dict[str, Any]:

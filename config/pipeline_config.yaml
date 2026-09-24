@@ -65,3 +65,9 @@ schema:
     performance_rating:
       type: int
       nullable: true
+
+anomaly_detection:
+  enabled: false
+  method: isolation_forest
+  contamination: 0.05
+  random_state: 42
