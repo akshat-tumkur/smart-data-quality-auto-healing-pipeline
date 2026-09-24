@@ -61,6 +61,7 @@ class Pipeline:
                 quality_score={"enabled": False},
                 execution_time=perf_counter() - start_time,
             )
+            result.execution_time = perf_counter() - start_time
             return result
 
         initial_profile = self.profiling_manager.run_profiling(dataframe)

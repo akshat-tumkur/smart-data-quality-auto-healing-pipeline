@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from numbers import Integral, Real
+from typing import Any
+
 import pandas as pd
 
 from profiling.profile_result import ProfileResult
@@ -59,6 +62,54 @@ class PipelineResult:
         self.profile_result = self.initial_profile
         self.validation_results = self.initial_validation
         self.schema_result = self.initial_schema_result
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return an API-safe representation without embedding DataFrames."""
+
+        return {
+            "schema": self._serialize(self.initial_schema_result),
+            "initial_profile": self._serialize(self.initial_profile),
+            "initial_validation": self._serialize(self.initial_validation),
+            "anomaly_detection": self._serialize(self.anomaly_detection_result),
+            "healing": self._serialize(self.healing_results),
+            "final_profile": self._serialize(self.final_profile),
+            "final_validation": self._serialize(self.final_validation),
+            "quality_score": self._serialize(self.quality_score),
+            "metrics": self._serialize(self.metrics),
+            "audit_trail": self._serialize(self.audit_trail),
+            "execution_time": float(self.execution_time),
+        }
+
+    @classmethod
+    def _serialize(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, (str, bool, int, float)):
+            return value
+        if isinstance(value, Integral):
+            return int(value)
+        if isinstance(value, Real):
+            return float(value)
+        if isinstance(value, dict):
+            return {str(key): cls._serialize(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [cls._serialize(item) for item in value]
+
+        to_dict = getattr(value, "to_dict", None)
+        if isinstance(to_dict, dict):
+            return cls._serialize(to_dict)
+        if callable(to_dict):
+            return cls._serialize(to_dict())
+
+        if isinstance(value, pd.DataFrame):
+            return None
+        if hasattr(value, "__dict__"):
+            return {
+                key: cls._serialize(item)
+                for key, item in value.__dict__.items()
+                if key not in {"dataframe", "healed_dataframe"}
+            }
+        return str(value)
 
     def __repr__(self) -> str:
         return (

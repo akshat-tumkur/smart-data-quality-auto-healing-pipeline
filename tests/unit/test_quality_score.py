@@ -87,3 +87,24 @@ def test_quality_score_does_not_double_count_overlapping_invalid_rows():
     )
 
     assert score.components["validity"] == 25.0
+
+
+def test_quality_score_uses_duplicate_validator_subset_metadata():
+    calculator = QualityScoreCalculator({"enabled": True})
+    duplicate_result = ValidationResult(
+        validator_name="Duplicate Validator",
+        status=False,
+        rows_affected=2,
+        metadata={
+            "subset": ["email"],
+            "duplicate_indices": [0, 1],
+        },
+    )
+
+    score = calculator.calculate(
+        profile(rows=3, columns=2, missing=0, duplicates=0),
+        [duplicate_result],
+    )
+
+    assert score.metrics["duplicate_rows"] == 2
+    assert score.components["uniqueness"] == 33.3333

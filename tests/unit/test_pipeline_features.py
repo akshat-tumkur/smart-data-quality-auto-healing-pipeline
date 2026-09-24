@@ -68,6 +68,12 @@ def test_pipeline_integrates_quality_score_metrics_and_audit():
     assert len(result.audit_trail["healing_actions"]) == 0
     json.dumps(result.audit_trail)
 
+    payload = result.to_dict()
+    json.dumps(payload)
+    assert "dataframe" not in payload
+    assert "healed_dataframe" not in payload
+    assert payload["final_validation"][0]["status"] is True
+
 
 def test_pipeline_anomaly_detection_is_optional_and_reportable():
     pipeline = Pipeline(

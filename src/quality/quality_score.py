@@ -63,7 +63,7 @@ class QualityScoreCalculator:
         column_count = max(int(getattr(profile, "column_count", 0)), 0)
         total_cells = row_count * column_count
         missing_values = int(getattr(profile, "total_missing_values", 0))
-        duplicate_rows = int(getattr(profile, "duplicate_rows", 0))
+        duplicate_rows = self._duplicate_rows(profile, validation_results)
         affected_rows = self._validation_affected_rows(validation_results, row_count)
 
         completeness = self._percentage(
@@ -111,6 +111,29 @@ class QualityScoreCalculator:
                 invalid_indices.update(indices)
 
         return min(max(len(invalid_indices), fallback_count), row_count)
+
+    @staticmethod
+    def _duplicate_rows(profile: Any, validation_results: list[Any]) -> int:
+        """Use configured duplicate-validator metadata when available.
+
+        The profiler measures full-row duplicates, while duplicate validation
+        may use a configured subset such as ``email``. The validation result
+        is therefore the authoritative uniqueness metric for this score.
+        """
+
+        duplicate_results = [
+            result
+            for result in validation_results
+            if str(getattr(result, "validator_name", "")).lower().startswith("duplicate")
+        ]
+        if duplicate_results:
+            indices: set[Any] = set()
+            for result in duplicate_results:
+                metadata = getattr(result, "metadata", {}) or {}
+                indices.update(metadata.get("duplicate_indices", []))
+            return len(indices)
+
+        return int(getattr(profile, "duplicate_rows", 0))
 
     def compare(self, initial: QualityScore, final: QualityScore) -> dict[str, Any]:
         if not initial.enabled or not final.enabled:
