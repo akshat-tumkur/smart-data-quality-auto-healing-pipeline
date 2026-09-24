@@ -23,6 +23,14 @@ from validation.validator_factory import ValidatorFactory
 from validation.validator_manager import ValidatorManager
 
 
+class UnsupportedDatasetError(ValueError):
+    """Raised when an upload is not a supported CSV dataset."""
+
+
+class EmptyDatasetError(ValueError):
+    """Raised when an upload has no content."""
+
+
 class PipelineService:
     """Build and run one synchronous pipeline execution for an uploaded CSV."""
 
@@ -35,6 +43,11 @@ class PipelineService:
         self.config = config or load_application_config()
 
     def run_csv(self, filename: str, content: bytes) -> dict:
+        if not filename.lower().endswith(".csv"):
+            raise UnsupportedDatasetError("Only CSV uploads are supported.")
+        if not content:
+            raise EmptyDatasetError("The uploaded dataset is empty.")
+
         run_id = uuid4().hex
         staging_path = self._save_upload(run_id, filename, content)
         runtime_config = deepcopy(self.config)
