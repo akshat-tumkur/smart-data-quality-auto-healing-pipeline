@@ -1,5 +1,6 @@
 from fastapi import APIRouter, File, HTTPException, UploadFile
 import pandas as pd
+from fastapi.responses import FileResponse
 
 from api.services.pipeline_service import (
     EmptyDatasetError,
@@ -35,3 +36,15 @@ async def run_pipeline(file: UploadFile = File(...)) -> dict:
             },
         )
     return payload
+
+
+@router.get("/{run_id}/download", summary="Download a cleaned dataset")
+def download_cleaned_dataset(run_id: str) -> FileResponse:
+    cleaned_path = pipeline_service.cleaned_dataset_path(run_id)
+    if cleaned_path is None:
+        raise HTTPException(status_code=404, detail="Cleaned dataset was not found.")
+    return FileResponse(
+        cleaned_path,
+        media_type="text/csv",
+        filename=cleaned_path.name,
+    )

@@ -83,6 +83,18 @@ class PipelineService:
         )
         return payload
 
+    def cleaned_dataset_path(self, run_id: str) -> Path | None:
+        if len(run_id) != 32 or any(
+            character not in "0123456789abcdef" for character in run_id.lower()
+        ):
+            return None
+
+        output_directory = (self.project_root / "data" / "cleaned").resolve()
+        output_path = (output_directory / f"{run_id}_cleaned.csv").resolve()
+        if output_path.parent != output_directory or not output_path.exists():
+            return None
+        return output_path
+
     def _build_pipeline(self, config: dict) -> Pipeline:
         validators = ValidatorFactory(config["validation"]).build()
         healer_factory = HealerFactory(

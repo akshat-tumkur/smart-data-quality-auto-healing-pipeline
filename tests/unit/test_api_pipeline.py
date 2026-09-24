@@ -68,3 +68,17 @@ def test_pipeline_run_accepts_csv_and_returns_pipeline_result():
     assert payload["quality_score"]["enabled"] is True
     assert payload["audit_trail"]["dataset"]["path"]
     assert Path(payload["output"]["cleaned_dataset"]).exists()
+
+    download_response = client.get(f"/pipeline/{payload['run_id']}/download")
+    assert download_response.status_code == 200
+    assert download_response.headers["content-type"].startswith("text/csv")
+    assert download_response.content.startswith(b"employee_id,")
+
+
+def test_download_returns_not_found_for_unknown_run():
+    response = TestClient(app).get(
+        "/pipeline/00000000000000000000000000000000/download"
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Cleaned dataset was not found."
