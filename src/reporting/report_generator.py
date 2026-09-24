@@ -18,9 +18,15 @@ class ReportGenerator:
         final_validation = self._get_final_validation(pipeline_result)
 
         schema_result = self._get_schema_result(pipeline_result)
+        anomaly_result = self._get_value(
+            pipeline_result,
+            "anomaly_detection_result",
+            None,
+        )
         sections = [
             self._render_title(),
             self._render_schema_section(schema_result),
+            self._render_anomaly_section(anomaly_result),
             self._render_dataset_section(
                 "INITIAL DATASET",
                 initial_profile,
@@ -41,6 +47,8 @@ class ReportGenerator:
                 final_validation,
             ),
             self._render_summary(final_validation, healing_results),
+            self._render_quality_section(pipeline_result),
+            self._render_audit_section(pipeline_result),
         ]
         return "\n\n".join(section for section in sections if section)
 
@@ -207,6 +215,87 @@ class ReportGenerator:
                     "Validators Failed",
                     initial_failed,
                     final_failed,
+                ),
+            ]
+        )
+
+    def _render_quality_section(self, pipeline_result: Any) -> str:
+        comparison = self._get_value(pipeline_result, "quality_score", {}) or {}
+        lines = [
+            "====================================================",
+            "DATA QUALITY SCORE",
+            "====================================================",
+            "",
+        ]
+        if not comparison.get("enabled", False):
+            lines.append("Quality scoring is disabled.")
+            return "\n".join(lines)
+
+        initial = comparison.get("initial", {})
+        final = comparison.get("final", {})
+        lines.extend(
+            [
+                self._format_metric("Initial Score", initial.get("score")),
+                self._format_metric("Final Score", final.get("score")),
+                self._format_metric("Improvement", comparison.get("delta")),
+                self._format_metric("Weights", initial.get("weights", {})),
+                self._format_metric("Initial Components", initial.get("components", {})),
+                self._format_metric("Final Components", final.get("components", {})),
+            ]
+        )
+        return "\n".join(lines)
+
+    def _render_anomaly_section(self, anomaly_result: Any) -> str:
+        if anomaly_result is None:
+            return ""
+
+        lines = [
+            "====================================================",
+            "ANOMALY DETECTION",
+            "====================================================",
+            "",
+        ]
+        if not self._get_value(anomaly_result, "enabled", False):
+            lines.append("Anomaly detection is disabled.")
+            return "\n".join(lines)
+
+        lines.extend(
+            [
+                self._format_metric(
+                    "Detector",
+                    self._get_value(anomaly_result, "detector_name", "Unknown"),
+                ),
+                self._format_metric(
+                    "Anomalies Detected",
+                    self._get_value(anomaly_result, "anomaly_count", 0),
+                ),
+                self._format_metric(
+                    "Feature Columns",
+                    ", ".join(self._get_value(anomaly_result, "feature_columns", [])),
+                ),
+            ]
+        )
+        return "\n".join(lines)
+
+    def _render_audit_section(self, pipeline_result: Any) -> str:
+        audit_trail = self._get_value(pipeline_result, "audit_trail", {}) or {}
+        if not audit_trail:
+            return ""
+
+        return "\n".join(
+            [
+                "====================================================",
+                "AUDIT SUMMARY",
+                "====================================================",
+                "",
+                self._format_metric("Dataset", audit_trail.get("dataset", {}).get("path")),
+                self._format_metric(
+                    "Healing Actions",
+                    len(audit_trail.get("healing_actions", [])),
+                ),
+                self._format_metric(
+                    "Pipeline Time",
+                    audit_trail.get("execution_time", 0.0),
                 ),
             ]
         )

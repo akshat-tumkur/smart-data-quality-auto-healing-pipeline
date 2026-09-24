@@ -20,7 +20,8 @@ class NullValidator(BaseValidator):
             message = f"Found {rows_affected} missing values across {len(null_counts)} columns."
 
         metadata = {
-            "null_counts": null_counts.to_dict()
+            "null_counts": null_counts.to_dict(),
+            "invalid_indices": df[df.isnull().any(axis=1)].index.tolist(),
         }
 
         

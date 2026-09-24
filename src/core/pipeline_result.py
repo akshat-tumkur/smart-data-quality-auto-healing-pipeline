@@ -18,6 +18,12 @@ class PipelineResult:
         healing_results: list[object] | None = None,
         final_profile: ProfileResult | None = None,
         final_validation: list[object] | None = None,
+        anomaly_detection_result: object | None = None,
+        initial_quality_score: object | None = None,
+        final_quality_score: object | None = None,
+        quality_score: dict | None = None,
+        audit_trail: dict | None = None,
+        metrics: dict | None = None,
         profile_result: ProfileResult | None = None,
         validation_results: list[object] | None = None,
     ) -> None:
@@ -41,6 +47,13 @@ class PipelineResult:
         self.final_validation = (
             final_validation if final_validation is not None else self.initial_validation
         )
+        self.anomaly_detection_result = anomaly_detection_result
+        self.initial_quality_score = initial_quality_score
+        self.final_quality_score = final_quality_score
+        self.quality_score = quality_score or {}
+        self.audit_trail = audit_trail or {}
+        self.metrics = metrics or {}
+        self.execution_time = 0.0
 
         # Backwards-compatible aliases for existing callers.
         self.profile_result = self.initial_profile

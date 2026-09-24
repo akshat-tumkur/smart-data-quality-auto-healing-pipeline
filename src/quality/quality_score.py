@@ -64,11 +64,7 @@ class QualityScoreCalculator:
         total_cells = row_count * column_count
         missing_values = int(getattr(profile, "total_missing_values", 0))
         duplicate_rows = int(getattr(profile, "duplicate_rows", 0))
-        affected_rows = sum(
-            min(max(int(getattr(result, "rows_affected", 0)), 0), row_count)
-            for result in validation_results
-            if not bool(getattr(result, "status", False))
-        )
+        affected_rows = self._validation_affected_rows(validation_results, row_count)
 
         completeness = self._percentage(
             total_cells - missing_values,
@@ -96,6 +92,25 @@ class QualityScoreCalculator:
                 "validation_affected_rows": affected_rows,
             },
         )
+
+    @staticmethod
+    def _validation_affected_rows(validation_results: list[Any], row_count: int) -> int:
+        invalid_indices: set[Any] = set()
+        fallback_count = 0
+        for result in validation_results:
+            if bool(getattr(result, "status", False)):
+                continue
+            metadata = getattr(result, "metadata", {}) or {}
+            indices = metadata.get("invalid_indices", metadata.get("duplicate_indices"))
+            if indices is None:
+                fallback_count = max(
+                    fallback_count,
+                    int(getattr(result, "rows_affected", 0)),
+                )
+            else:
+                invalid_indices.update(indices)
+
+        return min(max(len(invalid_indices), fallback_count), row_count)
 
     def compare(self, initial: QualityScore, final: QualityScore) -> dict[str, Any]:
         if not initial.enabled or not final.enabled:

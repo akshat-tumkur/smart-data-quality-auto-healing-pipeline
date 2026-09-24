@@ -71,3 +71,10 @@ anomaly_detection:
   method: isolation_forest
   contamination: 0.05
   random_state: 42
+
+quality_score:
+  enabled: true
+  weights:
+    completeness: 0.40
+    validity: 0.30
+    uniqueness: 0.30

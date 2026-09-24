@@ -21,6 +21,15 @@ def result(status, rows_affected):
     )
 
 
+def indexed_result(status, rows_affected, indices):
+    return ValidationResult(
+        validator_name="Indexed Validator",
+        status=status,
+        rows_affected=rows_affected,
+        metadata={"invalid_indices": indices},
+    )
+
+
 def test_quality_score_calculates_weighted_components():
     calculator = QualityScoreCalculator(
         {
@@ -64,3 +73,17 @@ def test_quality_score_compare_returns_delta():
     assert comparison["delta"] > 0
     assert comparison["initial"]["score"] == initial.score
     assert comparison["final"]["score"] == final.score
+
+
+def test_quality_score_does_not_double_count_overlapping_invalid_rows():
+    calculator = QualityScoreCalculator({"enabled": True})
+
+    score = calculator.calculate(
+        profile(rows=4, columns=1, missing=0, duplicates=0),
+        [
+            indexed_result(False, 2, [0, 1]),
+            indexed_result(False, 2, [1, 2]),
+        ],
+    )
+
+    assert score.components["validity"] == 25.0

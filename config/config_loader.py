@@ -36,12 +36,14 @@ class ConfigLoader:
         )
         schema = self._normalize_schema(raw_pipeline)
         anomaly_detection = self._normalize_anomaly_detection(raw_pipeline)
+        quality_score = self._normalize_quality_score(raw_pipeline)
 
         return {
             "pipeline": pipeline,
             "dataset": pipeline["dataset"],
             "schema": schema,
             "anomaly_detection": anomaly_detection,
+            "quality_score": quality_score,
             "validation": validation,
             "healing": healing,
             # Backward-compatible keys used by earlier code.
@@ -176,6 +178,18 @@ class ConfigLoader:
                 "Only anomaly_detection.method=isolation_forest is currently supported."
             )
         return anomaly_detection
+
+    def _normalize_quality_score(self, raw_config: dict[str, Any]) -> dict[str, Any]:
+        quality_score = dict(raw_config.get("quality_score", {}))
+        quality_score.setdefault("enabled", False)
+        weights = quality_score.get("weights", {})
+        if not isinstance(weights, dict):
+            raise ConfigurationError("quality_score.weights must be a mapping.")
+        quality_score["weights"] = {
+            name: float(value)
+            for name, value in weights.items()
+        }
+        return quality_score
 
 
 def load_config(file_path: str) -> dict[str, Any]:

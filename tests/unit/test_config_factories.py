@@ -28,6 +28,7 @@ def test_config_loader_normalizes_dataset_and_yaml_null_key(tmp_path):
     assert config["schema"]["columns"] == {}
     assert config["anomaly_detection"]["enabled"] is False
     assert config["anomaly_detection"]["method"] == "isolation_forest"
+    assert config["quality_score"]["enabled"] is False
     assert config["validation"]["null"]["enabled"] is True
     assert config["healing"]["missing"]["enabled"] is False
 
