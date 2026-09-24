@@ -38,7 +38,15 @@ class Pipeline:
         healing_results = []
 
         if self.healer_manager is not None:
-            healed_dataframe, healing_results = self.healer_manager.heal(dataframe)
+            try:
+                healed_dataframe, healing_results = self.healer_manager.heal(
+                    dataframe,
+                    validation_results=initial_validation,
+                )
+            except TypeError as exc:
+                if "validation_results" not in str(exc):
+                    raise
+                healed_dataframe, healing_results = self.healer_manager.heal(dataframe)
 
         final_profile = self.profiling_manager.run_profiling(healed_dataframe)
         final_validation = self.validation_manager.run_validations(healed_dataframe)

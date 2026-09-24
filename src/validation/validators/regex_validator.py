@@ -3,6 +3,8 @@ from ..validation_result import ValidationResult
 import time
 
 class RegexValidator(BaseValidator):
+    validation_type = "regex"
+
     def __init__(self, column_name, pattern):
         super().__init__("Regex Validator")
         self.column_name = column_name

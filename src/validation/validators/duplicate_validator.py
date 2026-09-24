@@ -6,6 +6,8 @@ from ..validation_result import ValidationResult
 
 
 class DuplicateValidator(BaseValidator):
+    validation_type = "duplicate"
+
     def __init__(self, subset=None) -> None:
         super().__init__("Duplicate Validator")
         self.subset = list(subset) if subset is not None else None

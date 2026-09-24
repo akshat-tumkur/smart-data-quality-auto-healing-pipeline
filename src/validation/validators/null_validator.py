@@ -3,6 +3,8 @@ from ..validation_result import ValidationResult
 import time
 
 class NullValidator(BaseValidator):
+    validation_type = "missing"
+
     def __init__(self):
         super().__init__("Null Validator")
 

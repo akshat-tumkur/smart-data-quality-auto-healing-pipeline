@@ -15,6 +15,7 @@ class RegexHealer(BaseHealer):
     """Apply deterministic text normalization to string-like columns."""
 
     display_name = "Regex Healer"
+    validation_types = frozenset({"regex"})
 
     def __init__(
         self,

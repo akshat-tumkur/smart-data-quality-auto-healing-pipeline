@@ -15,6 +15,7 @@ class DuplicateHealer(BaseHealer):
     """Remove duplicate rows while preserving the first occurrence."""
 
     display_name = "Duplicate Healer"
+    validation_types = frozenset({"duplicate"})
 
     def __init__(self, subset: Sequence[str] | None = None) -> None:
         """Initialize the healer with an optional duplicate key subset."""

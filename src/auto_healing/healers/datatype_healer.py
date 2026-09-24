@@ -15,6 +15,7 @@ class DatatypeHealer(BaseHealer):
     """Convert configured columns using safe, loss-aware transformations."""
 
     display_name = "Datatype Healer"
+    validation_types = frozenset({"datatype"})
 
     def __init__(self, column_types: Mapping[str, str] | None = None) -> None:
         """Initialize the healer with a mapping of column names to target types."""

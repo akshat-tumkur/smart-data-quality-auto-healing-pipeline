@@ -14,6 +14,7 @@ class BaseHealer(ABC):
 	"""Abstract base class for DataFrame healers."""
 
 	display_name: str | None = None
+	validation_types: frozenset[str] = frozenset()
 
 	@property
 	def healer_name(self) -> str:
@@ -36,11 +37,22 @@ class BaseHealer(ABC):
 	) -> HealingResult:
 		"""Create a standardized healing result."""
 
+		result_metadata = dict(metadata or {})
+		result_metadata.setdefault(
+			"summary",
+			{
+				"operation": self.healer_name,
+				"status": status,
+				"rows_affected": rows_affected,
+			},
+		)
+		result_metadata.setdefault("metrics", {"rows_affected": rows_affected})
+
 		return HealingResult(
 			healer_name=self.healer_name,
 			status=status,
 			message=message,
 			rows_affected=rows_affected,
 			execution_time=execution_time,
-			metadata=metadata or {},
+			metadata=result_metadata,
 		)

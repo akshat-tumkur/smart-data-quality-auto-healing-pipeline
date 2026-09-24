@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from time import perf_counter
-from typing import Iterable
+from typing import Any, Iterable
 
 import pandas as pd
 
@@ -29,13 +29,22 @@ class HealerManager:
 
 		self._healers.extend(healers)
 
-	def heal(self, dataframe: pd.DataFrame) -> tuple[pd.DataFrame, list[HealingResult]]:
-		"""Run all registered healers sequentially against a DataFrame."""
+	def heal(
+		self,
+		dataframe: pd.DataFrame,
+		validation_results: Iterable[Any] | None = None,
+	) -> tuple[pd.DataFrame, list[HealingResult]]:
+		"""Run compatible healers sequentially against a DataFrame.
+
+		When validation results are supplied, only healers matching failed
+		validation types are executed. Omitting them preserves legacy behavior.
+		"""
 
 		current_dataframe = dataframe.copy(deep=True)
 		results: list[HealingResult] = []
+		selected_healers = self._select_healers(validation_results)
 
-		for healer in self._healers:
+		for healer in selected_healers:
 			start_time = perf_counter()
 
 			try:
@@ -64,3 +73,37 @@ class HealerManager:
 				)
 
 		return current_dataframe, results
+
+	def _select_healers(
+		self,
+		validation_results: Iterable[Any] | None,
+	) -> list[BaseHealer]:
+		if validation_results is None:
+			return list(self._healers)
+
+		failed_types = {
+			self._validation_type(result)
+			for result in validation_results
+			if not bool(getattr(result, "status", False))
+		}
+		return [
+			healer
+			for healer in self._healers
+			if failed_types.intersection(getattr(healer, "validation_types", frozenset()))
+		]
+
+	@staticmethod
+	def _validation_type(result: Any) -> str:
+		validation_type = getattr(result, "validation_type", None)
+		if validation_type:
+			return str(validation_type)
+
+		metadata = getattr(result, "metadata", {}) or {}
+		if metadata.get("validation_type"):
+			return str(metadata["validation_type"])
+
+		name = str(getattr(result, "validator_name", "")).lower()
+		for token in ("missing", "null", "duplicate", "datatype", "data type", "regex"):
+			if token in name:
+				return "missing" if token == "null" else token.replace(" ", "")
+		return "unknown"

@@ -15,6 +15,7 @@ class MissingValueHealer(BaseHealer):
     """Fill missing values using deterministic, column-aware strategies."""
 
     display_name = "Missing Value Healer"
+    validation_types = frozenset({"missing"})
 
     def __init__(
         self,

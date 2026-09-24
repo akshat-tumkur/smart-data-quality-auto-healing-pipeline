@@ -6,6 +6,7 @@ import time
 
 
 class DataTypeValidator(BaseValidator):
+    validation_type = "datatype"
 
     def __init__(self, column_name, expected_type):
         super().__init__("Data Type Validator")
