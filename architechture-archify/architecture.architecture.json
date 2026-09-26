@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Smart Data Quality & Auto-healing Pipeline",
+    "quality_profile": "showcase",
+    "viewBox": [1360, 600]
+  },
+  "layout": { "mode": "grid", "origin": [40, 110], "cols": 6, "cellW": 190, "cellH": 150, "gapX": 30, "gapY": 55 },
+  "components": [
+    { "id": "sources", "type": "external", "label": "CSV dataset", "sublabel": "Upload · local file", "pos": [35, 100], "size": [160, 74] },
+    { "id": "api", "type": "frontend", "label": "API & dashboard", "sublabel": "FastAPI · Streamlit", "pos": [245, 100], "size": [160, 74] },
+    { "id": "orchestrator", "type": "backend", "label": "Pipeline service", "sublabel": "Tasks · retries", "pos": [455, 100], "size": [160, 74] },
+    { "id": "ingestion", "type": "backend", "label": "Ingestion", "sublabel": "CSV loader", "pos": [665, 100], "size": [160, 74] },
+    { "id": "profile_schema", "type": "backend", "label": "Profile & schema", "sublabel": "Shape · drift · stats", "pos": [665, 280], "size": [160, 74] },
+    { "id": "quality", "type": "backend", "label": "Quality analysis", "sublabel": "Rules · scores · anomalies", "pos": [875, 280], "size": [160, 74] },
+    { "id": "healing", "type": "backend", "label": "Auto-healing", "sublabel": "Select · repair", "pos": [1085, 280], "size": [160, 74] },
+    { "id": "storage", "type": "database", "label": "File outputs", "sublabel": "Cleaned CSV · report", "pos": [1085, 460], "size": [160, 74] },
+    { "id": "audit_reporting", "type": "backend", "label": "Audit & reporting", "sublabel": "Lineage · repair history", "pos": [875, 460], "size": [160, 74] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Application runtime · src/", "wraps": ["api", "orchestrator", "ingestion", "profile_schema", "quality", "healing", "storage", "audit_reporting"], "pad": 28 },
+    { "kind": "security-group", "label": "External input owner", "wraps": ["sources"], "pad": 10 }
+  ],
+  "connections": [
+    { "id": "source-request", "from": "sources", "to": "api", "label": "upload CSV", "variant": "emphasis", "labelAt": [220, 190] },
+    { "id": "api-run", "from": "api", "to": "orchestrator", "label": "start run", "variant": "emphasis", "labelDy": -30 },
+    { "id": "run-ingest", "from": "orchestrator", "to": "ingestion", "label": "load data", "labelDy": -30 },
+    { "id": "ingest-profile", "from": "ingestion", "to": "profile_schema", "label": "staged dataset", "fromSide": "bottom", "toSide": "top", "labelAt": [745, 200] },
+    { "id": "profile-quality", "from": "profile_schema", "to": "quality", "label": "profile + schema", "labelDy": -30 },
+    { "id": "quality-heal", "from": "quality", "to": "healing", "label": "issues + score", "labelDy": -30 },
+    { "id": "heal-store", "from": "healing", "to": "storage", "label": "repaired data", "fromSide": "bottom", "toSide": "top", "labelAt": [1165, 380] },
+    { "id": "store-audit", "from": "storage", "to": "audit_reporting", "label": "outputs + changes", "labelDy": -30 }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Runtime responsibilities", "items": ["Pipeline service coordinates a synchronous run; core retry/task utilities are available", "Profiling, schema checks, validation, scoring, and anomaly detection inform repair selection"] },
+    { "dot": "emerald", "title": "Data handling", "items": ["API uploads are staged under data/staging and cleaned CSVs are written under data/cleaned", "Audit trail captures schema, validation, anomaly, healing, metrics, score, and timing"] },
+    { "dot": "amber", "title": "Operational edges", "items": ["FastAPI exposes pipeline and health routes; Streamlit presents pipeline status", "SMTP alerts and Airflow DAG support are present; API upload flow currently accepts CSV"] }
+  ]
+}
