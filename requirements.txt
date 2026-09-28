@@ -1,4 +1,4 @@
-pandas
+pandas<3
 numpy
 pyyaml
 scikit-learn
@@ -9,4 +9,6 @@ requests
 python-dotenv
 pytest
 fastapi
+httpx2
+uvicorn
 python-multipart
