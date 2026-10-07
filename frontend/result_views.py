@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from html import escape
+import re
 from typing import Any
 
 import streamlit as st
@@ -64,6 +65,67 @@ def build_issue_comparison(result: dict[str, Any]) -> list[dict[str, Any]]:
     return issues
 
 
+def build_issue_reduction(result: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return reduction percentages for the same issues used by the comparison chart."""
+
+    reductions = []
+    for issue in build_issue_comparison(result):
+        before = issue["before"]
+        after = issue["after"]
+        reductions.append(
+            {
+                **issue,
+                "reduction_percent": _reduction_percent(before, after),
+            }
+        )
+    return reductions
+
+
+def build_attention_insights(result: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract unresolved final validation findings, sorted by remaining count."""
+
+    initial = _validation_index(result.get("initial_validation"))
+    final = _validation_index(result.get("final_validation"))
+    attention: list[dict[str, Any]] = []
+    for key, (label, remaining) in final.items():
+        if not isinstance(remaining, (int, float)) or remaining <= 0:
+            continue
+        before = initial.get(key, (label, remaining))[1]
+        status = "Partially resolved" if remaining < before else "Unresolved"
+        attention.append(
+            {
+                "label": label,
+                "remaining": remaining,
+                "status": status,
+                "metric": "validation affected rows",
+            }
+        )
+
+    duplicate_metric = (result.get("metrics") or {}).get("duplicate_affected_rows", {})
+    if (
+        isinstance(duplicate_metric, dict)
+        and duplicate_metric.get("after", 0) > 0
+        and not any(item["label"] == "Duplicate records" for item in attention)
+    ):
+        before = duplicate_metric.get("before", duplicate_metric["after"])
+        after = duplicate_metric["after"]
+        attention.append(
+            {
+                "label": "Duplicate records",
+                "remaining": after,
+                "status": "Partially resolved" if after < before else "Unresolved",
+                "metric": "duplicate affected rows",
+            }
+        )
+
+    return sorted(attention, key=lambda item: item["remaining"], reverse=True)
+
+
+def build_highest_priority_issue(result: dict[str, Any]) -> dict[str, Any] | None:
+    attention = build_attention_insights(result)
+    return attention[0] if attention else None
+
+
 def render_insights(result: dict[str, Any]) -> None:
     """Render the human-readable dashboard interpretation of pipeline metadata."""
 
@@ -95,6 +157,25 @@ def render_insights(result: dict[str, Any]) -> None:
         st.plotly_chart(_issue_chart(issues), use_container_width=True)
     else:
         st.info("No comparable issue metrics were returned.")
+
+    reductions = build_issue_reduction(result)
+    st.subheader("Issue Reduction")
+    if reductions:
+        _render_table(
+            ("Issue", "Reduction", "Before", "After"),
+            [
+                (
+                    item["label"],
+                    f"{item['reduction_percent']:.1f}%",
+                    _format_value(item["before"]),
+                    _format_value(item["after"]),
+                )
+                for item in reductions
+            ],
+        )
+        st.plotly_chart(_reduction_chart(reductions), use_container_width=True)
+    else:
+        st.info("No issue reduction data was returned.")
 
     healing = build_healing_insights(result.get("healing"))
     st.subheader("Healing Effectiveness")
@@ -137,6 +218,26 @@ def render_insights(result: dict[str, Any]) -> None:
                     st.caption("None")
     else:
         st.info("No remaining issue comparison was available.")
+
+    attention = build_attention_insights(result)
+    st.subheader("What Needs Attention?")
+    if attention:
+        priority = attention[0]
+        st.warning(
+            f"Highest priority: {priority['label']} — "
+            f"{_format_value(priority['remaining'])} {priority['metric']} remain."
+        )
+        _render_table(
+            ("Issue", "Remaining", "State"),
+            [
+                (item["label"], _format_value(item["remaining"]), item["status"])
+                for item in attention
+            ],
+        )
+    elif result.get("status") != "schema_failed":
+        st.success("No remaining data quality issues.")
+    else:
+        st.info("Attention findings are unavailable because schema validation stopped the run.")
 
     st.subheader("Validation Health")
     validation = build_validation_insights(result)
@@ -181,6 +282,19 @@ def _issue_chart(issues: list[dict[str, Any]]) -> go.Figure:
     figure.add_bar(name="Before", x=[item["label"] for item in issues], y=[item["before"] for item in issues])
     figure.add_bar(name="After", x=[item["label"] for item in issues], y=[item["after"] for item in issues])
     figure.update_layout(barmode="group", yaxis_title="Affected rows", height=360)
+    return figure
+
+
+def _reduction_chart(reductions: list[dict[str, Any]]) -> go.Figure:
+    figure = go.Figure(
+        go.Bar(
+            x=[item["reduction_percent"] for item in reductions],
+            y=[item["label"] for item in reductions],
+            orientation="h",
+            marker_color="#218739",
+        )
+    )
+    figure.update_layout(xaxis_title="Issue reduction (%)", xaxis_range=[0, 100], height=320)
     return figure
 
 
@@ -279,10 +393,15 @@ def _validation_index(results: Any) -> dict[tuple[str, Any], tuple[str, Any]]:
         name = str(item.get("validator_name", "Validation"))
         metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
         validator_key = _validator_key(name)
-        column = metadata.get("column")
+        column = metadata.get("column") or _column_from_message(item.get("message"))
         label = _friendly_validator_name(name, column)
         index[(validator_key, column)] = (label, item.get("rows_affected", 0) or 0)
     return index
+
+
+def _column_from_message(message: Any) -> str | None:
+    match = re.search(r"column ['\"]([^'\"]+)['\"]", str(message or ""), re.IGNORECASE)
+    return match.group(1) if match else None
 
 
 def _validator_key(name: str) -> str:
@@ -334,6 +453,14 @@ def _score_timeline(quality: Any, phase: str) -> str:
         return "Disabled"
     score = (quality.get(phase) or {}).get("score")
     return _score_value(score)
+
+
+def _reduction_percent(before: Any, after: Any) -> float:
+    if not isinstance(before, (int, float)) or not isinstance(after, (int, float)):
+        return 0.0
+    if before <= 0:
+        return 0.0
+    return round(max(0.0, min(100.0, ((before - after) / before) * 100)), 2)
 
 
 def render_quality_score(quality_score: Any) -> None:

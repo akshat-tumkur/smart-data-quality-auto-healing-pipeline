@@ -1,10 +1,14 @@
 from frontend.result_views import (
+    build_attention_insights,
     build_audit_timeline,
     build_healing_insights,
+    build_highest_priority_issue,
     build_issue_comparison,
+    build_issue_reduction,
     build_quality_insights,
     build_remaining_issues,
     build_validation_insights,
+    _reduction_percent,
 )
 
 
@@ -58,6 +62,57 @@ def test_issue_and_remaining_insights_use_backend_values():
     assert {item["label"] for item in issues} == {"Missing values", "Duplicate affected rows", "Datatype: salary", "Invalid formatting: email"}
     assert {item["label"]: item["status"] for item in remaining}["Missing values"] == "Resolved"
     assert {item["label"]: item["status"] for item in remaining}["Invalid formatting: email"] == "Unresolved"
+
+
+def test_issue_reduction_uses_safe_percentage_calculation():
+    result = sample_result()
+    result["initial_validation"].append(
+        {"validator_name": "Regex Validator", "status": False, "rows_affected": 642, "metadata": {"column": "phone"}}
+    )
+    result["final_validation"].append(
+        {"validator_name": "Regex Validator", "status": False, "rows_affected": 103, "metadata": {"column": "phone"}}
+    )
+
+    reductions = {item["label"]: item["reduction_percent"] for item in build_issue_reduction(result)}
+
+    assert reductions["Missing values"] == 100.0
+    assert reductions["Duplicate affected rows"] == round((2 / 14) * 100, 2)
+    assert reductions["Invalid formatting: email"] == 0.0
+    assert reductions["Invalid formatting: phone"] == round(((642 - 103) / 642) * 100, 2)
+    assert _reduction_percent(0, 0) == 0.0
+
+
+def test_attention_insights_sort_remaining_issues_and_preserve_duplicate_semantics():
+    result = sample_result()
+    result["metrics"]["duplicate_affected_rows"] = {"before": 14, "after": 12, "delta": -2}
+    result["final_validation"].append(
+        {"validator_name": "Regex Validator", "status": False, "rows_affected": 103, "metadata": {"column": "phone"}}
+    )
+    result["initial_validation"].append(
+        {"validator_name": "Regex Validator", "status": False, "rows_affected": 642, "metadata": {"column": "phone"}}
+    )
+
+    attention = build_attention_insights(result)
+    priority = build_highest_priority_issue(result)
+
+    assert attention[0]["label"] == "Invalid formatting: phone"
+    assert attention[0]["remaining"] == 103
+    assert attention[0]["status"] == "Partially resolved"
+    assert priority == attention[0]
+    duplicate = next(item for item in attention if item["label"] == "Duplicate records")
+    assert duplicate["remaining"] == 12
+    assert duplicate["metric"] == "duplicate affected rows"
+
+
+def test_attention_insights_return_no_priority_when_final_validation_is_clean():
+    result = sample_result()
+    result["final_validation"] = [
+        {"validator_name": "Null Validator", "status": True, "rows_affected": 0, "metadata": {}},
+    ]
+    result["metrics"]["duplicate_affected_rows"] = {"before": 0, "after": 0, "delta": 0}
+
+    assert build_attention_insights(result) == []
+    assert build_highest_priority_issue(result) is None
 
 
 def test_healing_and_validation_insights_preserve_partial_status():
