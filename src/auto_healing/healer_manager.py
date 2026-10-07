@@ -54,7 +54,7 @@ class HealerManager:
 				if not isinstance(result, HealingResult):
 					raise TypeError("Healer must return a HealingResult instance.")
 
-				if result.status == "success":
+				if result.status in {"success", "partial"}:
 					current_dataframe = updated_dataframe
 				results.append(result)
 			except Exception as exc:

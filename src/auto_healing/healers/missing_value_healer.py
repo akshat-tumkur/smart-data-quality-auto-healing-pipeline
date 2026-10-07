@@ -38,9 +38,12 @@ class MissingValueHealer(BaseHealer):
             if self.strategy not in {"mean", "median", "mode", "constant"}:
                 raise ValueError(f"Unsupported missing value strategy: {self.strategy}")
 
-            working_dataframe = dataframe
+            before_dataframe = dataframe.copy(deep=True)
+            working_dataframe = dataframe.copy(deep=True)
             target_columns = self.columns or list(working_dataframe.columns)
-            total_filled = 0
+            attempted = 0
+            changed = 0
+            unresolved = 0
             filled_columns: dict[str, dict[str, Any]] = {}
             skipped_columns: dict[str, str] = {}
 
@@ -55,66 +58,86 @@ class MissingValueHealer(BaseHealer):
                 if missing_count == 0:
                     continue
 
+                attempted += missing_count
+                column_strategy = self.strategy
                 if self.strategy == "constant":
                     if self.fill_value is None:
                         raise ValueError("Constant strategy requires a fill_value.")
-                    working_dataframe[column] = series.fillna(self.fill_value)
-                    filled_columns[column] = {
-                        "strategy": self.strategy,
-                        "fill_value": self.fill_value,
-                        "filled_count": missing_count,
-                    }
-                    total_filled += missing_count
-                    continue
-
-                if pd.api.types.is_numeric_dtype(series):
-                    if self.strategy == "mean":
-                        fill_value = series.mean(skipna=True)
-                    elif self.strategy == "median":
-                        fill_value = series.median(skipna=True)
-                    else:
-                        m = series.mode(dropna=True)
-                        fill_value = m.iloc[0] if not m.empty else None
+                    fill_value = self.fill_value
                 else:
-                    mode_values = series.mode(dropna=True)
-                    fill_value = mode_values.iloc[0] if not mode_values.empty else None
+                    if pd.api.types.is_numeric_dtype(series):
+                        if self.strategy == "mean":
+                            fill_value = series.mean(skipna=True)
+                            column_strategy = "mean"
+                        elif self.strategy == "median":
+                            fill_value = series.median(skipna=True)
+                            column_strategy = "median"
+                        else:
+                            mode_values = series.mode(dropna=True)
+                            fill_value = mode_values.iloc[0] if not mode_values.empty else None
+                            column_strategy = "mode"
+                    else:
+                        mode_values = series.mode(dropna=True)
+                        fill_value = mode_values.iloc[0] if not mode_values.empty else None
+                        column_strategy = "mode"
 
                 if fill_value is None or pd.isna(fill_value):
                     skipped_columns[column] = "No deterministic fill value available."
+                    unresolved += missing_count
                     continue
 
                 working_dataframe[column] = series.fillna(fill_value)
                 filled_columns[column] = {
-                    "strategy": self.strategy,
+                    "strategy": column_strategy,
                     "fill_value": fill_value,
                     "filled_count": missing_count,
                 }
-                total_filled += missing_count
+                changed += missing_count
 
-            message = (
-                f"Filled {total_filled} missing values."
-                if total_filled > 0
-                else "No missing values were filled."
+            for column in filled_columns:
+                dataframe[column] = working_dataframe[column]
+
+            change_summary = self._change_summary(
+                before_dataframe,
+                dataframe,
+                columns=list(filled_columns.keys()),
+            )
+            status, message = self.summarize_status(
+                attempted=attempted,
+                changed=changed,
+                unresolved=unresolved,
+                default_message=(
+                    f"Filled {changed} missing values."
+                    if changed > 0
+                    else "No missing values were filled."
+                ),
             )
             metadata = {
-                "strategy": self.strategy,
+                "strategy": "per_column",
+                "configured_strategy": self.strategy,
+                "attempted": attempted,
+                "changed": changed,
+                "unresolved": unresolved,
+                "rows_affected": change_summary["rows_affected"],
+                "cells_changed": change_summary["cells_changed"],
+                "columns_affected": change_summary["columns_affected"],
                 "filled_columns": filled_columns,
                 "skipped_columns": skipped_columns,
             }
             return (
-                working_dataframe,
+                dataframe,
                 self.build_result(
-                    status="success",
+                    status=status,
                     message=message,
-                    rows_affected=total_filled,
+                    rows_affected=change_summary["rows_affected"],
                     execution_time=perf_counter() - start_time,
                     metadata=metadata,
                 ),
             )
         except Exception as exc:
             return (
-                    dataframe,
-                    self.build_result(
+                dataframe,
+                self.build_result(
                     status="failed",
                     message="Missing value healing failed.",
                     rows_affected=0,

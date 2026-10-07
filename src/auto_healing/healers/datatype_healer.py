@@ -31,11 +31,14 @@ class DatatypeHealer(BaseHealer):
         start_time = perf_counter()
 
         try:
-            working_dataframe = dataframe
+            before_dataframe = dataframe.copy(deep=True)
+            working_dataframe = dataframe.copy(deep=True)
             rows_affected = 0
             converted_columns: dict[str, dict[str, Any]] = {}
             failed_conversions: dict[str, dict[str, Any]] = {}
             skipped_columns: dict[str, str] = {}
+            attempted = 0
+            unresolved = 0
 
             for column, target_type in self.column_types.items():
                 if column not in working_dataframe.columns:
@@ -56,29 +59,47 @@ class DatatypeHealer(BaseHealer):
                     }
                     continue
 
+                attempted += int(series.notna().sum())
                 working_dataframe[column] = converted_series
                 rows_affected += affected_rows
                 if column_metadata.get("invalid_conversion_count", 0) > 0:
                     failed_conversions[column] = column_metadata
+                    unresolved += int(column_metadata["invalid_conversion_count"])
                 else:
                     converted_columns[column] = column_metadata
 
-            message = (
-                f"Converted {rows_affected} values across {len(converted_columns)} columns."
-                if rows_affected > 0
-                else "No datatype conversions were applied."
+            for column in self.column_types:
+                if column in working_dataframe.columns:
+                    dataframe[column] = working_dataframe[column]
+
+            change_summary = self._change_summary(before_dataframe, dataframe, list(converted_columns.keys()))
+            status, message = self.summarize_status(
+                attempted=attempted,
+                changed=rows_affected,
+                unresolved=unresolved,
+                default_message=(
+                    f"Converted {rows_affected} values across {len(converted_columns)} columns."
+                    if rows_affected > 0
+                    else "No datatype conversions were applied."
+                ),
             )
             metadata = {
+                "attempted": attempted,
+                "changed": rows_affected,
+                "unresolved": unresolved,
+                "rows_affected": change_summary["rows_affected"],
+                "cells_changed": change_summary["cells_changed"],
+                "columns_affected": change_summary["columns_affected"],
                 "converted_columns": converted_columns,
                 "failed_conversions": failed_conversions,
                 "skipped_columns": skipped_columns,
             }
             return (
-                working_dataframe,
+                dataframe,
                 self.build_result(
-                    status="success",
+                    status=status,
                     message=message,
-                    rows_affected=rows_affected,
+                    rows_affected=change_summary["rows_affected"],
                     execution_time=perf_counter() - start_time,
                     metadata=metadata,
                 ),
@@ -115,7 +136,7 @@ class DatatypeHealer(BaseHealer):
             }
 
         if target_type in {"int", "float"}:
-            numeric_series = pd.to_numeric(series, errors="coerce")
+            numeric_series = self._coerce_numeric_series(series)
             non_missing_mask = series.notna()
             valid_mask = non_missing_mask & numeric_series.notna()
 

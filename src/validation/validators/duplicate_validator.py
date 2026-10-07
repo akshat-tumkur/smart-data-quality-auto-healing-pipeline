@@ -25,6 +25,11 @@ class DuplicateValidator(BaseValidator):
         metadata = {
             "duplicate_indices": df[duplicate_rows].index.tolist(),
             "subset": self.subset,
+            "duplicate_groups": int(
+                df.loc[duplicate_rows]
+                .groupby(self.subset or list(df.columns), dropna=False)
+                .ngroups
+            ),
         }
 
         execution_time = time.perf_counter() - start

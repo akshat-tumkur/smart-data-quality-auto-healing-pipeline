@@ -2,20 +2,36 @@
 
 import streamlit as st
 
-from frontend.services.api_client import (
-    PipelineApiClient,
-    PipelineApiError,
-    friendly_error_message,
-)
-from frontend.result_views import (
-    render_anomalies,
-    render_audit,
-    render_data_metrics,
-    render_healing,
-    render_quality_score,
-    render_schema,
-    render_validation,
-)
+try:
+    from frontend.services.api_client import (
+        PipelineApiClient,
+        PipelineApiError,
+        friendly_error_message,
+    )
+    from frontend.result_views import (
+        render_anomalies,
+        render_audit,
+        render_data_metrics,
+        render_healing,
+        render_quality_score,
+        render_schema,
+        render_validation,
+    )
+except ModuleNotFoundError:
+    from services.api_client import (
+        PipelineApiClient,
+        PipelineApiError,
+        friendly_error_message,
+    )
+    from result_views import (
+        render_anomalies,
+        render_audit,
+        render_data_metrics,
+        render_healing,
+        render_quality_score,
+        render_schema,
+        render_validation,
+    )
 
 
 api_client = PipelineApiClient()

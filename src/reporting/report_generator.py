@@ -41,6 +41,7 @@ class ReportGenerator:
                 final_validation,
             ),
             self._render_improvement_summary(
+                pipeline_result,
                 initial_profile,
                 final_profile,
                 initial_validation,
@@ -110,11 +111,15 @@ class ReportGenerator:
         successful = sum(
             1 for result in results if self._get_value(result, "status", "") == "success"
         )
-        failed = len(results) - successful
+        partial = sum(
+            1 for result in results if self._get_value(result, "status", "") == "partial"
+        )
+        failed = len(results) - successful - partial
         lines.extend(
             [
                 self._format_metric("Healers Run", len(results)),
                 self._format_metric("Succeeded", successful),
+                self._format_metric("Partial", partial),
                 self._format_metric("Failed", failed),
                 "",
             ]
@@ -135,7 +140,10 @@ class ReportGenerator:
         message = self._get_value(healing_result, "message", "")
 
         status_label = str(status).upper()
-        status_icon = "[OK]" if status == "success" else "[FAILED]"
+        status_icon = {
+            "success": "[OK]",
+            "partial": "[PARTIAL]",
+        }.get(status, "[FAILED]")
 
         return [
             f"{status_icon} {healer_name}",
@@ -180,6 +188,7 @@ class ReportGenerator:
 
     def _render_improvement_summary(
         self,
+        pipeline_result: Any,
         initial_profile: Any,
         final_profile: Any,
         initial_validation: Iterable[Any],
@@ -205,6 +214,16 @@ class ReportGenerator:
                     "Duplicate Rows",
                     self._get_value(initial_profile, "duplicate_rows", 0),
                     self._get_value(final_profile, "duplicate_rows", 0),
+                ),
+                self._format_metric(
+                    "Duplicate Affected Rows",
+                    self._get_value(pipeline_result, "metrics", {})
+                    .get("duplicate_affected_rows", {}),
+                ),
+                self._format_metric(
+                    "Duplicate Groups",
+                    self._get_value(pipeline_result, "metrics", {})
+                    .get("duplicate_groups", {}),
                 ),
                 self._format_transition(
                     "Validators Passed",

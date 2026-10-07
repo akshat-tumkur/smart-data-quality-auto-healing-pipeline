@@ -45,8 +45,13 @@ class DuplicateHealer(BaseHealer):
                 if removed_count > 0
                 else "No duplicate rows were found."
             )
+            dataframe.drop_duplicates(
+                subset=self.subset,
+                keep="first",
+                inplace=True,
+            )
             return (
-                working_dataframe,
+                dataframe,
                 self.build_result(
                     status="success",
                     message=message,

@@ -3,6 +3,8 @@ import json
 import pandas as pd
 
 from core.pipeline import Pipeline
+from auto_healing import HealerManager
+from auto_healing.healers.missing_value_healer import MissingValueHealer
 from profiling.dataset_profiler import DatasetProfiler
 from profiling.profiling_manager import ProfilingManager
 from schema.schema_manager import SchemaManager
@@ -65,6 +67,11 @@ def test_pipeline_integrates_quality_score_metrics_and_audit():
     assert result.quality_score["enabled"] is True
     assert result.quality_score["final"]["score"] > result.quality_score["initial"]["score"]
     assert result.metrics["missing_values"] == {"before": 1, "after": 0, "delta": -1}
+    assert result.metrics["duplicate_affected_rows"] == {
+        "before": 0,
+        "after": 0,
+        "delta": 0,
+    }
     assert len(result.audit_trail["healing_actions"]) == 0
     json.dumps(result.audit_trail)
 
@@ -100,3 +107,27 @@ def test_pipeline_anomaly_detection_is_optional_and_reportable():
     assert result.anomaly_detection_result.enabled is True
     assert result.anomaly_detection_result.anomaly_count >= 1
     assert dataframe.equals(pd.DataFrame({"value": [1, 2, 3, 100]}))
+
+
+def test_pipeline_reconciles_healing_with_final_validation_and_audit():
+    dataframe = pd.DataFrame({"value": [None, 2.0]})
+    validation_manager = ValidationManager()
+    pipeline = Pipeline(
+        profiling_manager=ProfilingManager(DatasetProfiler()),
+        validation_manager=validation_manager,
+        healer_manager=HealerManager([MissingValueHealer(strategy="median")]),
+        schema_manager=SchemaManager(SchemaValidator()),
+        config={
+            "schema": schema_config(),
+            "quality_score": {"enabled": True},
+            "anomaly_detection": {"enabled": False},
+        },
+    )
+
+    result = pipeline.run(dataframe)
+
+    assert result.initial_validation[0].status is False
+    assert result.final_validation[0].status is True
+    assert result.healing_results[0].status == "success"
+    assert result.healing_results[0].metadata["remaining"] == 0
+    assert result.audit_trail["healing_actions"][0]["remaining"] == 0

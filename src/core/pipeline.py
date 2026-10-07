@@ -1,4 +1,5 @@
 from time import perf_counter
+from dataclasses import replace
 from typing import Any
 
 import pandas as pd
@@ -85,6 +86,11 @@ class Pipeline:
 
         final_profile = self.profiling_manager.run_profiling(healed_dataframe)
         final_validation = self.validation_manager.run_validations(healed_dataframe)
+        healing_results = self._reconcile_healing_results(
+            healing_results,
+            initial_validation,
+            final_validation,
+        )
         initial_quality = self.quality_calculator.calculate(
             initial_profile,
             initial_validation,
@@ -94,7 +100,12 @@ class Pipeline:
             final_validation,
         )
         quality_score = self.quality_calculator.compare(initial_quality, final_quality)
-        metrics = self._build_metrics(initial_profile, final_profile)
+        metrics = self._build_metrics(
+            initial_profile,
+            final_profile,
+            initial_validation,
+            final_validation,
+        )
         result = PipelineResult(
             dataframe=dataframe,
             initial_schema_result=schema_result,
@@ -125,7 +136,12 @@ class Pipeline:
         return result
 
     @staticmethod
-    def _build_metrics(initial_profile: Any, final_profile: Any) -> dict[str, Any]:
+    def _build_metrics(
+        initial_profile: Any,
+        final_profile: Any,
+        initial_validation: list[Any] | None = None,
+        final_validation: list[Any] | None = None,
+    ) -> dict[str, Any]:
         metrics = {}
         for name, attribute in (
             ("missing_values", "total_missing_values"),
@@ -135,4 +151,117 @@ class Pipeline:
             before = int(getattr(initial_profile, attribute, 0))
             after = int(getattr(final_profile, attribute, 0))
             metrics[name] = {"before": before, "after": after, "delta": after - before}
+
+        initial_duplicate = next(
+            (
+                result
+                for result in (initial_validation or [])
+                if "duplicate" in str(getattr(result, "validator_name", "")).lower()
+            ),
+            None,
+        )
+        final_duplicate = next(
+            (
+                result
+                for result in (final_validation or [])
+                if "duplicate" in str(getattr(result, "validator_name", "")).lower()
+            ),
+            None,
+        )
+        initial_duplicate_rows = int(getattr(initial_duplicate, "rows_affected", 0))
+        final_duplicate_rows = int(getattr(final_duplicate, "rows_affected", 0))
+        metrics["duplicate_affected_rows"] = {
+            "before": initial_duplicate_rows,
+            "after": final_duplicate_rows,
+            "delta": final_duplicate_rows - initial_duplicate_rows,
+        }
+        initial_duplicate_groups = int(
+            (getattr(initial_duplicate, "metadata", {}) or {}).get("duplicate_groups", 0)
+        )
+        final_duplicate_groups = int(
+            (getattr(final_duplicate, "metadata", {}) or {}).get("duplicate_groups", 0)
+        )
+        metrics["duplicate_groups"] = {
+            "before": initial_duplicate_groups,
+            "after": final_duplicate_groups,
+            "delta": final_duplicate_groups - initial_duplicate_groups,
+        }
         return metrics
+
+    @staticmethod
+    def _reconcile_healing_results(
+        healing_results: list[Any],
+        initial_validation: list[Any],
+        final_validation: list[Any],
+    ) -> list[Any]:
+        """Make healer status and repair counts reflect final validation."""
+
+        reconciled = []
+        for result in healing_results:
+            operation = str(getattr(result, "healer_name", "")).lower()
+            validation_type = next(
+                (
+                    token
+                    for token, marker in (
+                        ("missing", "missing"),
+                        ("duplicate", "duplicate"),
+                        ("datatype", "datatype"),
+                        ("regex", "regex"),
+                    )
+                    if marker in operation
+                ),
+                None,
+            )
+            if validation_type is None:
+                reconciled.append(result)
+                continue
+
+            initial_count = Pipeline._validation_count(initial_validation, validation_type)
+            remaining_count = Pipeline._validation_count(final_validation, validation_type)
+            repaired_count = max(initial_count - remaining_count, 0)
+            metadata = dict(getattr(result, "metadata", {}) or {})
+            metadata.update(
+                {
+                    "initial_affected": initial_count,
+                    "repaired": repaired_count,
+                    "remaining": remaining_count,
+                    "attempted": initial_count,
+                    "changed": repaired_count,
+                    "unresolved": remaining_count,
+                }
+            )
+
+            if initial_count == 0 or remaining_count == 0:
+                status = "success"
+            elif repaired_count > 0:
+                status = "partial"
+            else:
+                status = "failed"
+            message = (
+                f"{getattr(result, 'healer_name', 'Healer')} reconciliation: "
+                f"initial affected={initial_count}, repaired={repaired_count}, "
+                f"remaining={remaining_count}."
+            )
+            reconciled.append(
+                replace(
+                    result,
+                    status=status,
+                    message=message,
+                    metadata=metadata,
+                )
+            )
+        return reconciled
+
+    @staticmethod
+    def _validation_count(results: list[Any], validation_type: str) -> int:
+        counts = []
+        for result in results:
+            name = str(getattr(result, "validator_name", "")).lower()
+            if (
+                (validation_type == "missing" and "null" in name)
+                or (validation_type == "duplicate" and "duplicate" in name)
+                or (validation_type == "datatype" and "data type" in name)
+                or (validation_type == "regex" and "regex" in name)
+            ):
+                counts.append(int(getattr(result, "rows_affected", 0)))
+        return sum(counts)
