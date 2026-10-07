@@ -90,12 +90,12 @@ def test_dashboard_renders_scores_metrics_schema_and_validation_from_result():
     metric_values = [metric.value for metric in app.metric]
     assert "74.00" in metric_values
     assert "91.00" in metric_values
-    assert "80.00 → 100.00" in metric_values
-    assert "10 → 0" in metric_values
+    assert any("Completeness" in element.value for element in app.markdown)
+    assert any("Missing values" in element.value for element in app.markdown)
     assert ("Anomalies detected", "1") in [(metric.label, metric.value) for metric in app.metric]
     assert ("Healers executed", "1") in [(metric.label, metric.value) for metric in app.metric]
-    assert any("NullValidator" in element.value for element in app.markdown)
-    assert any("MissingValueHealer" in element.value for element in app.markdown)
+    assert "Validation Health" in [element.value for element in app.subheader]
+    assert "Healing Effectiveness" in [element.value for element in app.subheader]
     assert "Detected anomalies are flagged for review and are not automatically healed." in [
         item.value for item in app.info
     ]

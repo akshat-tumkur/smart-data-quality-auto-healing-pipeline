@@ -9,6 +9,7 @@ try:
         friendly_error_message,
     )
     from frontend.result_views import (
+        render_insights,
         render_anomalies,
         render_audit,
         render_data_metrics,
@@ -24,6 +25,7 @@ except ModuleNotFoundError:
         friendly_error_message,
     )
     from result_views import (
+        render_insights,
         render_anomalies,
         render_audit,
         render_data_metrics,
@@ -242,15 +244,8 @@ if isinstance(result, dict):
         st.caption(f"Run ID: {st.session_state.run_id}")
 
     schema_failed = result.get("status") == "schema_failed"
-    render_quality_score(result.get("quality_score"))
-    render_data_metrics(result.get("metrics"))
+    render_insights(result)
     render_schema(result.get("schema"))
-    render_validation(
-        result.get("initial_validation"),
-        result.get("final_validation"),
-        schema_failed=schema_failed,
-    )
-    render_healing(result.get("healing"), schema_failed=schema_failed)
     render_anomalies(result.get("anomaly_detection"), schema_failed=schema_failed)
     render_audit(
         result.get("audit_trail"),

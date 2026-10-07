@@ -3,6 +3,7 @@ numpy
 pyyaml
 scikit-learn
 streamlit
+plotly
 sqlalchemy
 psycopg2-binary
 requests

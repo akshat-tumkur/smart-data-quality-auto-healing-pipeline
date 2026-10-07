@@ -6,6 +6,334 @@ from html import escape
 from typing import Any
 
 import streamlit as st
+import plotly.graph_objects as go
+
+
+STATUS_COLORS = {
+    "success": "#218739",
+    "partial": "#c47b00",
+    "failed": "#c53d3d",
+    "resolved": "#218739",
+    "partially resolved": "#c47b00",
+    "unresolved": "#c53d3d",
+}
+
+
+def build_quality_insights(quality_score: Any) -> dict[str, Any]:
+    if not isinstance(quality_score, dict) or not quality_score.get("enabled"):
+        return {"enabled": False}
+    initial = quality_score.get("initial") or {}
+    final = quality_score.get("final") or {}
+    initial_components = initial.get("components") or {}
+    final_components = final.get("components") or {}
+    components = {
+        name: {
+            "before": initial_components[name],
+            "after": final_components[name],
+        }
+        for name in initial_components
+        if name in final_components
+    }
+    return {
+        "enabled": True,
+        "before": initial.get("score"),
+        "after": final.get("score"),
+        "improvement": quality_score.get("delta"),
+        "components": components,
+    }
+
+
+def build_issue_comparison(result: dict[str, Any]) -> list[dict[str, Any]]:
+    metrics = result.get("metrics") if isinstance(result, dict) else {}
+    issues: list[dict[str, Any]] = []
+    for key, label in (
+        ("missing_values", "Missing values"),
+        ("duplicate_affected_rows", "Duplicate affected rows"),
+    ):
+        values = metrics.get(key) if isinstance(metrics, dict) else None
+        if isinstance(values, dict) and "before" in values and "after" in values:
+            issues.append(_issue(label, values["before"], values["after"]))
+
+    initial = _validation_index(result.get("initial_validation"))
+    final = _validation_index(result.get("final_validation"))
+    for key, (label, before) in initial.items():
+        if key[0] in {"null", "duplicate"}:
+            continue
+        if key in final:
+            issues.append(_issue(label, before, final[key][1]))
+    return issues
+
+
+def render_insights(result: dict[str, Any]) -> None:
+    """Render the human-readable dashboard interpretation of pipeline metadata."""
+
+    schema_failed = result.get("status") == "schema_failed"
+    quality = build_quality_insights(result.get("quality_score"))
+    st.header("Data Quality Overview")
+    if quality.get("enabled"):
+        score_columns = st.columns(3)
+        score_columns[0].metric("Before", _score_value(quality.get("before")))
+        score_columns[1].metric("After", _score_value(quality.get("after")))
+        score_columns[2].metric("Improvement", _score_delta(quality.get("improvement")))
+        component_rows = [
+            [
+                _label(name),
+                _score_value(values["before"]),
+                _score_value(values["after"]),
+            ]
+            for name, values in quality.get("components", {}).items()
+        ]
+        if component_rows:
+            _render_table(("Dimension", "Before", "After"), component_rows)
+            st.plotly_chart(_component_chart(quality["components"]), use_container_width=True)
+    else:
+        st.info("Quality scoring is disabled for this run.")
+
+    issues = build_issue_comparison(result)
+    st.subheader("Issues Before vs After")
+    if issues:
+        st.plotly_chart(_issue_chart(issues), use_container_width=True)
+    else:
+        st.info("No comparable issue metrics were returned.")
+
+    healing = build_healing_insights(result.get("healing"))
+    st.subheader("Healing Effectiveness")
+    if healing:
+        _render_table(
+            ("Healer", "Status", "Attempted", "Repaired", "Remaining"),
+            [
+                (
+                    item["name"],
+                    item["status"].upper(),
+                    _format_value(item["attempted"]),
+                    _format_value(item["repaired"]),
+                    _format_value(item["remaining"]),
+                )
+                for item in healing
+            ],
+        )
+        st.plotly_chart(_healing_chart(healing), use_container_width=True)
+    else:
+        st.info(
+            "Auto-healing did not run because required schema columns were missing."
+            if schema_failed
+            else "No automatic repairs were required."
+        )
+
+    remaining = build_remaining_issues(result)
+    st.subheader("Remaining Data Quality Issues")
+    if remaining:
+        groups = {"Resolved": [], "Partially resolved": [], "Unresolved": []}
+        for issue in remaining:
+            groups[issue["status"]].append(
+                f"{issue['label']}: {issue['before']} → {issue['after']}"
+            )
+        for title, entries in groups.items():
+            with st.expander(f"{title} ({len(entries)})", expanded=title != "Resolved"):
+                if entries:
+                    for entry in entries:
+                        st.write(entry)
+                else:
+                    st.caption("None")
+    else:
+        st.info("No remaining issue comparison was available.")
+
+    st.subheader("Validation Health")
+    validation = build_validation_insights(result)
+    if validation:
+        _render_table(
+            ("Validation", "Before", "After", "Remaining", "Status"),
+            [
+                (
+                    row["validation"],
+                    _format_value(row["before"]),
+                    _format_value(row["after"]),
+                    _format_value(row["remaining"]),
+                    row["status"],
+                )
+                for row in validation
+            ],
+        )
+    else:
+        st.info(
+            "Validation did not run because required schema columns were missing."
+            if schema_failed
+            else "No validation results were returned."
+        )
+
+    st.subheader("Audit Timeline")
+    for index, event in enumerate(build_audit_timeline(result), start=1):
+        st.markdown(f"**{index}. {event['step']}**  ")
+        st.caption(event["detail"])
+
+
+def _component_chart(components: dict[str, Any]) -> go.Figure:
+    names = [_label(name) for name in components]
+    figure = go.Figure()
+    figure.add_bar(name="Before", x=names, y=[item["before"] for item in components.values()])
+    figure.add_bar(name="After", x=names, y=[item["after"] for item in components.values()])
+    figure.update_layout(barmode="group", yaxis_title="Score", yaxis_range=[0, 100], height=320)
+    return figure
+
+
+def _issue_chart(issues: list[dict[str, Any]]) -> go.Figure:
+    figure = go.Figure()
+    figure.add_bar(name="Before", x=[item["label"] for item in issues], y=[item["before"] for item in issues])
+    figure.add_bar(name="After", x=[item["label"] for item in issues], y=[item["after"] for item in issues])
+    figure.update_layout(barmode="group", yaxis_title="Affected rows", height=360)
+    return figure
+
+
+def _healing_chart(healing: list[dict[str, Any]]) -> go.Figure:
+    labels = [item["name"] for item in healing]
+    figure = go.Figure()
+    figure.add_bar(name="Repaired", y=labels, x=[item["repaired"] if _is_number(item["repaired"]) else 0 for item in healing], orientation="h")
+    figure.add_bar(name="Remaining", y=labels, x=[item["remaining"] if _is_number(item["remaining"]) else 0 for item in healing], orientation="h")
+    figure.update_layout(barmode="group", xaxis_title="Rows / values", height=320)
+    return figure
+
+
+def build_healing_insights(healing: Any) -> list[dict[str, Any]]:
+    if not isinstance(healing, list):
+        return []
+    insights = []
+    for action in healing:
+        if not isinstance(action, dict):
+            continue
+        metadata = action.get("metadata") if isinstance(action.get("metadata"), dict) else {}
+        status = str(action.get("status", "unknown")).lower()
+        insights.append(
+            {
+                "name": _friendly_healer_name(action.get("healer_name")),
+                "status": status,
+                "attempted": metadata.get("attempted", "Not available"),
+                "repaired": metadata.get("repaired", metadata.get("changed", "Not available")),
+                "remaining": metadata.get("remaining", metadata.get("unresolved", "Not available")),
+                "rows_affected": action.get("rows_affected", "Not available"),
+            }
+        )
+    return insights
+
+
+def build_remaining_issues(result: dict[str, Any]) -> list[dict[str, Any]]:
+    issues = build_issue_comparison(result)
+    remaining = []
+    for issue in issues:
+        before = issue["before"]
+        after = issue["after"]
+        if after == 0:
+            status = "Resolved"
+        elif isinstance(before, (int, float)) and after < before:
+            status = "Partially resolved"
+        else:
+            status = "Unresolved"
+        remaining.append({**issue, "status": status})
+    return remaining
+
+
+def build_validation_insights(result: dict[str, Any]) -> list[dict[str, Any]]:
+    initial = _validation_index(result.get("initial_validation"))
+    final = _validation_index(result.get("final_validation"))
+    rows = []
+    for key, (label, before) in initial.items():
+        after = final.get(key, (label, 0))[1]
+        rows.append(
+            {
+                "validation": label,
+                "before": before,
+                "after": after,
+                "remaining": after,
+                "status": "Passed" if after == 0 else "Needs attention",
+            }
+        )
+    return rows
+
+
+def build_audit_timeline(result: dict[str, Any]) -> list[dict[str, str]]:
+    healing = build_healing_insights(result.get("healing"))
+    partial = sum(item["status"] == "partial" for item in healing)
+    repaired = sum(
+        item["repaired"] for item in healing if isinstance(item["repaired"], (int, float))
+    )
+    return [
+        {"step": "Dataset ingested", "detail": result.get("audit_trail", {}).get("dataset", {}).get("processed_at", "Completed")},
+        {"step": "Schema validated", "detail": _schema_status(result.get("schema"))},
+        {"step": "Initial profiling and validation", "detail": f"{len(result.get('initial_validation') or [])} checks"},
+        {"step": "Anomaly detection", "detail": _anomaly_timeline(result.get("anomaly_detection"))},
+        {"step": "Initial quality score", "detail": _score_timeline(result.get("quality_score"), "initial")},
+        {"step": "Auto-healing", "detail": f"{len(healing)} healers; {repaired} repaired; {partial} partial"},
+        {"step": "Final profiling and validation", "detail": f"{len(result.get('final_validation') or [])} checks"},
+        {"step": "Final quality score", "detail": _score_timeline(result.get("quality_score"), "final")},
+    ]
+
+
+def _issue(label: str, before: Any, after: Any) -> dict[str, Any]:
+    return {"label": label, "before": before, "after": after, "delta": after - before}
+
+
+def _validation_index(results: Any) -> dict[tuple[str, Any], tuple[str, Any]]:
+    index = {}
+    for item in results if isinstance(results, list) else []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("validator_name", "Validation"))
+        metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+        validator_key = _validator_key(name)
+        column = metadata.get("column")
+        label = _friendly_validator_name(name, column)
+        index[(validator_key, column)] = (label, item.get("rows_affected", 0) or 0)
+    return index
+
+
+def _validator_key(name: str) -> str:
+    lowered = name.lower()
+    if "null" in lowered:
+        return "null"
+    if "duplicate" in lowered:
+        return "duplicate"
+    if "data type" in lowered:
+        return "datatype"
+    if "regex" in lowered:
+        return "regex"
+    return lowered
+
+
+def _friendly_validator_name(name: Any, column: Any = None) -> str:
+    key = _validator_key(str(name))
+    labels = {
+        "null": "Missing values",
+        "duplicate": "Duplicate records",
+        "datatype": "Datatype",
+        "regex": "Invalid formatting",
+    }
+    label = labels.get(key, str(name))
+    return f"{label}: {column}" if column else label
+
+
+def _friendly_healer_name(name: Any) -> str:
+    value = str(name or "Healer")
+    return value.removesuffix(" Healer")
+
+
+def _schema_status(schema: Any) -> str:
+    if isinstance(schema, dict) and schema.get("status") is True:
+        return "Valid"
+    if isinstance(schema, dict) and schema.get("status") is False:
+        return "Issues found"
+    return "Not available"
+
+
+def _anomaly_timeline(anomaly: Any) -> str:
+    if not isinstance(anomaly, dict) or not anomaly.get("enabled"):
+        return "Disabled"
+    return f"{anomaly.get('anomaly_count', 0)} flagged"
+
+
+def _score_timeline(quality: Any, phase: str) -> str:
+    if not isinstance(quality, dict) or not quality.get("enabled"):
+        return "Disabled"
+    score = (quality.get(phase) or {}).get("score")
+    return _score_value(score)
 
 
 def render_quality_score(quality_score: Any) -> None:
